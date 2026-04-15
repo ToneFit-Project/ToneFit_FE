@@ -4,17 +4,20 @@
   "modes": { "174:0": "Mode 1" },
   "variableIds": [
     "VariableID:174:4",
+    "VariableID:782:2",
     "VariableID:174:5",
     "VariableID:174:6",
     "VariableID:174:7",
     "VariableID:174:8",
     "VariableID:174:9",
+    "VariableID:782:4",
+    "VariableID:782:5",
     "VariableID:174:10"
   ],
   "variables": [
     {
       "id": "VariableID:174:4",
-      "name": "radius/none",
+      "name": "rounded/r-none",
       "description": "",
       "type": "FLOAT",
       "valuesByMode": { "174:0": 0 },
@@ -27,7 +30,7 @@
     },
     {
       "id": "VariableID:174:5",
-      "name": "radius/sm",
+      "name": "rounded/r-sm",
       "description": "",
       "type": "FLOAT",
       "valuesByMode": { "174:0": 4 },
@@ -40,7 +43,20 @@
     },
     {
       "id": "VariableID:174:6",
-      "name": "radius/md",
+      "name": "rounded/r-md",
+      "description": "",
+      "type": "FLOAT",
+      "valuesByMode": { "174:0": 6 },
+      "resolvedValuesByMode": {
+        "174:0": { "resolvedValue": 6, "alias": null }
+      },
+      "scopes": ["ALL_SCOPES"],
+      "hiddenFromPublishing": false,
+      "codeSyntax": {}
+    },
+    {
+      "id": "VariableID:174:7",
+      "name": "rounded/r-lg",
       "description": "",
       "type": "FLOAT",
       "valuesByMode": { "174:0": 8 },
@@ -52,8 +68,8 @@
       "codeSyntax": {}
     },
     {
-      "id": "VariableID:174:7",
-      "name": "radius/lg",
+      "id": "VariableID:174:8",
+      "name": "rounded/r-xl",
       "description": "",
       "type": "FLOAT",
       "valuesByMode": { "174:0": 12 },
@@ -65,8 +81,8 @@
       "codeSyntax": {}
     },
     {
-      "id": "VariableID:174:8",
-      "name": "radius/xl",
+      "id": "VariableID:174:9",
+      "name": "rounded/r-2xl",
       "description": "",
       "type": "FLOAT",
       "valuesByMode": { "174:0": 16 },
@@ -78,26 +94,52 @@
       "codeSyntax": {}
     },
     {
-      "id": "VariableID:174:9",
-      "name": "radius/2xl",
+      "id": "VariableID:174:10",
+      "name": "rounded/r-full",
       "description": "",
       "type": "FLOAT",
-      "valuesByMode": { "174:0": 20 },
+      "valuesByMode": { "174:0": 9999 },
       "resolvedValuesByMode": {
-        "174:0": { "resolvedValue": 20, "alias": null }
+        "174:0": { "resolvedValue": 9999, "alias": null }
       },
       "scopes": ["ALL_SCOPES"],
       "hiddenFromPublishing": false,
       "codeSyntax": {}
     },
     {
-      "id": "VariableID:174:10",
-      "name": "radius/full",
+      "id": "VariableID:782:2",
+      "name": "rounded/r-xs",
       "description": "",
       "type": "FLOAT",
-      "valuesByMode": { "174:0": 9999 },
+      "valuesByMode": { "174:0": 2 },
       "resolvedValuesByMode": {
-        "174:0": { "resolvedValue": 9999, "alias": null }
+        "174:0": { "resolvedValue": 2, "alias": null }
+      },
+      "scopes": ["ALL_SCOPES"],
+      "hiddenFromPublishing": false,
+      "codeSyntax": {}
+    },
+    {
+      "id": "VariableID:782:4",
+      "name": "rounded/r-3xl",
+      "description": "",
+      "type": "FLOAT",
+      "valuesByMode": { "174:0": 24 },
+      "resolvedValuesByMode": {
+        "174:0": { "resolvedValue": 24, "alias": null }
+      },
+      "scopes": ["ALL_SCOPES"],
+      "hiddenFromPublishing": false,
+      "codeSyntax": {}
+    },
+    {
+      "id": "VariableID:782:5",
+      "name": "rounded/r-4xl",
+      "description": "",
+      "type": "FLOAT",
+      "valuesByMode": { "174:0": 32 },
+      "resolvedValuesByMode": {
+        "174:0": { "resolvedValue": 32, "alias": null }
       },
       "scopes": ["ALL_SCOPES"],
       "hiddenFromPublishing": false,
