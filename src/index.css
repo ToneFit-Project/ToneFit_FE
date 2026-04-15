@@ -6,7 +6,8 @@
 @theme {
   /* 폰트 패밀리 등록 */
   --font-sans: "Pretendard", sans-serif;
-  /* Color Roles → Tailwind 클래스로 연결 */
+  /* Color Roles → Tailwind 클래스 생성 */
+  /* text */
   --color-text-primary: var(--color-text-primary);
   --color-text-secondary: var(--color-text-secondary);
   --color-text-tertiary: var(--color-text-tertiary);
@@ -20,6 +21,21 @@
   --color-text-danger: var(--color-text-danger);
   --color-text-info: var(--color-text-info);
 
+  /* icon - text와 동일 */
+  --color-icon-primary: var(--color-icon-primary);
+  --color-icon-secondary: var(--color-icon-secondary);
+  --color-icon-tertiary: var(--color-icon-tertiary);
+  --color-icon-disabled: var(--color-icon-disabled);
+  --color-icon-placeholder: var(--color-icon-placeholder);
+  --color-icon-inverse: var(--color-icon-inverse);
+  --color-icon-brand: var(--color-icon-brand);
+  --color-icon-brand-strong: var(--color-icon-brand-strong);
+  --color-icon-success: var(--color-icon-success);
+  --color-icon-warning: var(--color-icon-warning);
+  --color-icon-danger: var(--color-icon-danger);
+  --color-icon-info: var(--color-icon-info);
+
+  /* background */
   --color-background-page: var(--color-background-page);
   --color-background-surface: var(--color-background-surface);
   --color-background-subtle: var(--color-background-subtle);
@@ -27,97 +43,42 @@
   --color-background-disabled: var(--color-background-disabled);
   --color-background-overlay: var(--color-background-overlay);
   --color-background-inverse: var(--color-background-inverse);
-  --color-background-brand: var(--color-background-brand);
-  --color-background-brand-subtle: var(--color-background-brand-subtle);
   --color-background-hover: var(--color-background-hover);
   --color-background-pressed: var(--color-background-pressed);
+  --color-background-hover-2: var(--color-background-hover-2);
+  --color-background-pressed-2: var(--color-background-pressed-2);
+  --color-background-brand: var(--color-background-brand);
+  --color-background-brand-subtle: var(--color-background-brand-subtle);
+  --color-background-selected: var(--color-background-selected);
   --color-background-success-subtle: var(--color-background-success-subtle);
   --color-background-warning-subtle: var(--color-background-warning-subtle);
   --color-background-danger-subtle: var(--color-background-danger-subtle);
+  --color-background-info-subtle: var(--color-background-info-subtle);
 
+  /* border */
   --color-border-default: var(--color-border-default);
   --color-border-subtle: var(--color-border-subtle);
   --color-border-strong: var(--color-border-strong);
   --color-border-disabled: var(--color-border-disabled);
+  --color-border-inverse: var(--color-border-inverse);
   --color-border-focus: var(--color-border-focus);
   --color-border-brand: var(--color-border-brand);
   --color-border-success: var(--color-border-success);
+  --color-border-info: var(--color-border-info);
   --color-border-warning: var(--color-border-warning);
   --color-border-danger: var(--color-border-danger);
 
-  --color-icon-primary: var(--color-icon-primary);
-  --color-icon-secondary: var(--color-icon-secondary);
-  --color-icon-tertiary: var(--color-icon-tertiary);
-  --color-icon-disabled: var(--color-icon-disabled);
-  --color-icon-brand: var(--color-icon-brand);
-  --color-icon-success: var(--color-icon-success);
-  --color-icon-warning: var(--color-icon-warning);
-  --color-icon-danger: var(--color-icon-danger);
 
-  /* Radius */
-  --radius-none: var(--radius-none);
-  --radius-sm: var(--radius-sm);
-  --radius-md: var(--radius-md);
-  --radius-lg: var(--radius-lg);
-  --radius-xl: var(--radius-xl);
-  --radius-2xl: var(--radius-2xl);
-  --radius-full: var(--radius-full);
-
-  /* Spacing */
-  --spacing-space-xxs: var(--space-xxs);
-  --spacing-space-xs: var(--space-xs);
-  --spacing-space-sm: var(--space-sm);
-  --spacing-space-md: var(--space-md);
-  --spacing-space-lg: var(--space-lg);
-  --spacing-space-xl: var(--space-xl);
-  --spacing-space-2xl: var(--space-2xl);
-  --spacing-space-3xl: var(--space-3xl);
-  --spacing-space-4xl: var(--space-4xl);
-  --spacing-space-5xl: var(--space-5xl);
-  --spacing-space-6xl: var(--space-6xl);
-  --spacing-space-7xl: var(--space-7xl);
-  --spacing-space-8xl: var(--space-8xl);
-  --spacing-space-9xl: var(--space-9xl);
-  --spacing-space-10xl: var(--space-10xl);
-
-  /* Font Size → text-size-* 클래스 생성 */
-  --text-fs-2xs: var(--font-size-2xs);
-  --text-fs-xs: var(--font-size-xs);
-  --text-fs-sm: var(--font-size-sm);
-  --text-fs-md: var(--font-size-md);
-  --text-fs-lg: var(--font-size-lg);
-  --text-fs-xl: var(--font-size-xl);
-  --text-fs-2xl: var(--font-size-2xl);
-  --text-fs-3xl: var(--font-size-3xl);
-  --text-fs-4xl: var(--font-size-4xl);
-  --text-fs-5xl: var(--font-size-5xl);
-  --text-fs-6xl: var(--font-size-6xl);
-  --text-fs-7xl: var(--font-size-7xl);
-
-  /* Line Height → leading-height-* 클래스 생성 */
-  --leading-height-xs: var(--font-line-height-xs);
-  --leading-height-sm: var(--font-line-height-sm);
-  --leading-height-md: var(--font-line-height-md);
-  --leading-height-lg: var(--font-line-height-lg);
-  --leading-height-xl: var(--font-line-height-xl);
-  --leading-height-2xl: var(--font-line-height-2xl);
-  --leading-height-3xl: var(--font-line-height-3xl);
-  --leading-height-4xl: var(--font-line-height-4xl);
-  --leading-height-5xl: var(--font-line-height-5xl);
-  --leading-height-6xl: var(--font-line-height-6xl);
-  --leading-height-7xl: var(--font-line-height-7xl);
-  --leading-height-8xl: var(--font-line-height-8xl);
-  --leading-height-9xl: var(--font-line-height-9xl);
+  /* Font Size (Tailwind에 없는 것만) */
+  --text-2xs: 10px;
+  --text-xl-plus: 22px;
+  --text-2xl-plus: 28px;
+  --text-3xl-plus: 32px;
+  --text-4xl-plus: 40px;
 
   /* Letter Spacing */
   --tracking-tight: var(--font-letter-spacing-tight);
   --tracking-normal: var(--font-letter-spacing-normal);
   --tracking-wide: var(--font-letter-spacing-wide);
 
-  /* Button 인터랙션 색상
-     color-mix()로 palette 변수를 재사용 — HEX 하드코딩 없음
-     hover  → gray-900 80% = rgba(17,24,39,0.8)
-     pressed → gray-900 60% = rgba(17,24,39,0.6) */
-  --color-background-inverse-hover: color-mix(in srgb, var(--color-palette-gray-900) 80%, transparent);
-  --color-background-inverse-pressed: color-mix(in srgb, var(--color-palette-gray-900) 60%, transparent);
 }
