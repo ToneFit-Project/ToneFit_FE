@@ -77,10 +77,10 @@ const LoginPage = () => {
 
   return (
     <div className="login max-w-135 w-full flex flex-col gap-10">
-      {/* ── 타이틀 영역 ──────────────────────────────────── */}
+      {/* 타이틀 영역 */}
       <TitleText heading="로그인" />
 
-      {/* ── 폼 ───────────────────────────────────────────── */}
+      {/* 폼 */}
       <form
         onSubmit={handleSubmit(onSubmit)}
         noValidate

@@ -80,8 +80,9 @@ const ButtonGroup = ({
         ${className}
       `}
     >
-      {options.map((option) => {
+      {options.map((option, index) => {
         const isSelected = option.value === value;
+        const isLast = index === options.length - 1;
 
         return (
           <Button
@@ -89,7 +90,8 @@ const ButtonGroup = ({
             variant={isSelected ? 'primary' : 'mute'}
             aria-pressed={isSelected}
             onClick={() => onChange(option.value)}
-            className="flex-1"
+            disabled={isLast && !isSelected}
+            className="flex-1 border-0"
           >
             {option.label}
           </Button>

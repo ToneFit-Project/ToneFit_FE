@@ -19,7 +19,8 @@ export type IconName =
   | 'library'
   | 'info'
   | 'close-circle'
-  | 'check-circle';
+  | 'check-circle'
+  | 'check-circle-bg';
 
 interface IconProps extends SVGAttributes<SVGSVGElement> {
   /** 아이콘 이름 */
@@ -326,6 +327,20 @@ const Icon = ({
           <path
             d="m7 12 4 4 6-7"
             stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    /* check-circle-bg — 채워진 원 배경 + 흰색 체크마크 (Figma: icon/success) */
+    case 'check-circle-bg':
+      return (
+        <svg {...base} fill="none">
+          <circle cx="12" cy="12" r="11" fill="currentColor" />
+          <path
+            d="m7.5 12 3.5 3.5 5.5-6.5"
+            stroke="white"
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"

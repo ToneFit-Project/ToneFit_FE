@@ -371,6 +371,7 @@ const JoinAcceptPage = () => {
         value={canProceed ? 'next' : ''}
         onChange={handleNavigation}
         className="w-full"
+        // disabled={value.label === '다음'? true : false}
       />
     </div>
   );

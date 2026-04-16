@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,8 +34,9 @@ type CareerValue = 'NEW' | 'JUNIOR' | 'MIDDLE' | 'SENIOR';
 
 // ── 상수 ──────────────────────────────────────────────────────────
 
-/** 이메일 도메인 선택지 */
-const EMAIL_DOMAINS = [
+/** 이메일 도메인 선택지 (첫 번째 항목 = 직접 입력) */
+const EMAIL_DOMAIN_OPTIONS = [
+  '직접 입력',
   'naver.com',
   'gmail.com',
   'daum.net',
@@ -126,18 +127,15 @@ const PasswordRule = ({
  */
 const ChevronDownIcon = () => (
   <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+    width="13"
+    height="10"
+    viewBox="0 0 13 10"
     fill="none"
-    aria-hidden="true"
   >
     <path
-      d="M6 9l6 6 6-6"
-      stroke="var(--color-icon-tertiary)"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      d="M5.26182 8.82967C5.65992 9.39838 6.50218 9.39839 6.90029 8.82967L11.9796 1.57346C12.4436 0.910686 11.9694 0 11.1604 0H1.00171C0.192687 0 -0.281466 0.910685 0.182478 1.57346L5.26182 8.82967Z"
+      fill="#9CA3AF"
     />
   </svg>
 );
@@ -159,7 +157,7 @@ const ChevronDownIcon = () => (
  *   1. Stepper      — step=2 (회원가입 진행 중)
  *   2. TitleText    — heading="회원 정보"
  *   3. 입력 필드 섹션
- *      a. 이메일 입력  — username + @ + 도메인 select + 중복확인 버튼
+ *      a. 이메일 입력  — username + @ + 도메인 커스텀 드롭다운 + 중복확인 버튼
  *      b. 비밀번호 입력 — hide/show 토글 + 3개 규칙 안내
  *      c. 닉네임 입력  — 유효 시 check-circle 아이콘
  *      d. 업종 선택    — 4열 Chip 그리드 (8개)
@@ -167,14 +165,17 @@ const ChevronDownIcon = () => (
  *   4. ButtonGroup  — 이전 / 다음
  *
  * 상태 구조:
- *   emailId        — @ 앞 사용자명
- *   emailDomain    — @ 뒤 도메인 (select)
- *   emailChecked   — 중복 확인 완료 여부
- *   password       — 비밀번호 (규칙 실시간 검증)
- *   showPassword   — 비밀번호 표시 여부
- *   nickname       — 닉네임 (2자 이상 시 유효)
- *   industry       — 선택된 업종 (null = 미선택)
- *   career         — 선택된 경력 (null = 미선택)
+ *   emailId          — @ 앞 사용자명
+ *   emailDomain      — @ 뒤 도메인 (커스텀 드롭다운)
+ *   isCustomDomain   — '직접 입력' 선택 여부
+ *   customDomainInput — 직접 입력 시 사용자 타이핑 도메인
+ *   isDropdownOpen   — 도메인 드롭다운 열림 여부
+ *   emailChecked     — 중복 확인 완료 여부
+ *   password         — 비밀번호 (규칙 실시간 검증)
+ *   showPassword     — 비밀번호 표시 여부
+ *   nickname         — 닉네임 (2자 이상 시 유효)
+ *   industry         — 선택된 업종 (null = 미선택)
+ *   career           — 선택된 경력 (null = 미선택)
  *
  * canProceed 조건 (다음 버튼 활성):
  *   emailChecked && 비밀번호 규칙 3개 모두 통과
@@ -188,6 +189,16 @@ const JoinInfoPage = () => {
   const [emailId, setEmailId] = useState('');
   const [emailDomain, setEmailDomain] = useState('naver.com');
 
+  /** '직접 입력' 선택 여부 */
+  const [isCustomDomain, setIsCustomDomain] = useState(false);
+  /** 직접 입력 시 사용자가 타이핑하는 도메인 값 */
+  const [customDomainInput, setCustomDomainInput] = useState('');
+  /** 도메인 드롭다운 열림/닫힘 */
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  /** 드롭다운 영역 ref — 외부 클릭 감지용 */
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   /**
    * 중복 확인 완료 여부
    * emailId 또는 도메인이 변경되면 false로 초기화합니다.
@@ -199,10 +210,30 @@ const JoinInfoPage = () => {
     setEmailChecked(false);
   };
 
-  const handleDomainChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    setEmailDomain(e.target.value);
+  const handleDomainSelect = (domain: string) => {
+    if (domain === '직접 입력') {
+      setIsCustomDomain(true);
+    } else {
+      setIsCustomDomain(false);
+      setEmailDomain(domain);
+    }
+    setIsDropdownOpen(false);
     setEmailChecked(false);
   };
+
+  /** 드롭다운 외부 클릭 시 닫기 */
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // ── 비밀번호 ────────────────────────────────────────────────────
 
@@ -246,6 +277,11 @@ const JoinInfoPage = () => {
     industry !== null &&
     career !== null;
 
+  // ── 중복확인 버튼 비활성 조건 ───────────────────────────────────
+
+  const isDuplicateCheckDisabled =
+    !emailId.trim() || (isCustomDomain && !customDomainInput.trim());
+
   // ── 이전/다음 핸들러 ────────────────────────────────────────────
 
   /**
@@ -286,7 +322,7 @@ const JoinInfoPage = () => {
         <div className="flex flex-col gap-10">
           {/* ── 이메일 입력 ───────────────────────────────────────── */}
           {/*
-           * 레이아웃: [username input + @] flex-1 | [domain select] | [중복확인]
+           * 레이아웃: [username input + @] flex-1 | [domain 커스텀 드롭다운] | [중복확인]
            * emailId 또는 domain 변경 시 emailChecked 초기화
            */}
           <div className="flex flex-col">
@@ -299,6 +335,7 @@ const JoinInfoPage = () => {
                   h-16.5 rounded-lg px-6
                   bg-background-subtle border border-border-default
                   focus-within:border-border-focus transition-colors
+                  max-w-88
                 "
               >
                 <input
@@ -314,44 +351,136 @@ const JoinInfoPage = () => {
                     placeholder:text-text-placeholder placeholder:font-normal
                   "
                 />
-                <span className="text-lg leading-6.5 font-semibold tracking-tight text-text-placeholder shrink-0">
-                  @
-                </span>
               </div>
+              <span className="text-lg leading-6.5 font-semibold tracking-tight text-text-placeholder shrink-0">
+                @
+              </span>
 
-              {/* 도메인 드롭다운 */}
+              {/* ── 커스텀 도메인 드롭다운 (Figma node 474-7342) ─── */}
               {/*
-               * native <select> + 절대 위치 화살표 아이콘
-               * appearance-none으로 기본 화살표 제거
+               * native <select> 대신 커스텀 드롭다운 구현
+               * - 트리거: 선택된 도메인 텍스트 + 화살표 아이콘
+               * - 드롭다운 목록: border/rounded-lg, max-h-[264px] 스크롤
+               * - '직접 입력' 선택 시 isCustomDomain=true → 텍스트 인풋으로 전환
                */}
-              <div className="relative shrink-0">
-                <select
-                  value={emailDomain}
-                  onChange={handleDomainChange}
-                  className="
-                    appearance-none
+              <div className="relative shrink-0 w-51" ref={dropdownRef}>
+                {/* 트리거 버튼 또는 직접 입력 인풋 */}
+                {isCustomDomain ? (
+                  /* 직접 입력 선택 시: 도메인 텍스트 인풋 + 화살표 버튼 */
+                  <div
+                    className="
+                    flex items-center justify-between
                     bg-background-surface border border-border-default
-                    h-16.5 rounded-lg pl-6 pr-10
-                    text-lg leading-6.5 font-semibold tracking-tight text-text-placeholder
-                    w-[168px] cursor-pointer outline-none
-                    focus:border-border-focus transition-colors
+                    h-16.5 rounded-lg px-5
+                    focus-within:border-border-focus transition-colors
+                    w-full
                   "
-                >
-                  {EMAIL_DOMAINS.map((domain) => (
-                    <option key={domain} value={domain}>
-                      {domain}
-                    </option>
-                  ))}
-                </select>
-                {/* 드롭다운 화살표 아이콘 (클릭 통과) */}
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <ChevronDownIcon />
-                </div>
+                  >
+                    <input
+                      type="text"
+                      value={customDomainInput}
+                      onChange={(e) => {
+                        setCustomDomainInput(e.target.value);
+                        setEmailChecked(false);
+                      }}
+                      placeholder="도메인 입력"
+                      className="
+                        flex-1 min-w-0 bg-transparent outline-none
+                        text-lg leading-6.5 font-semibold tracking-tight
+                        text-text-secondary
+                        placeholder:text-text-placeholder placeholder:font-normal
+                      "
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsDropdownOpen((prev) => !prev)}
+                      aria-label="도메인 목록 열기"
+                      className="shrink-0 "
+                    >
+                      <div
+                        className={`transition-transform duration-200 ${isDropdownOpen ? '-scale-y-100' : ''}`}
+                      >
+                        <ChevronDownIcon />
+                      </div>
+                    </button>
+                  </div>
+                ) : (
+                  /* 선택된 도메인 표시 트리거 버튼 */
+                  <button
+                    type="button"
+                    onClick={() => setIsDropdownOpen((prev) => !prev)}
+                    className="
+                      flex items-center justify-between gap-6
+                      bg-background-surface border border-border-default
+                      h-16.5 rounded-lg px-5
+                      text-lg leading-6.5 font-semibold tracking-tight text-text-secondary
+                      cursor-pointer outline-none
+                      focus:border-border-focus transition-colors
+                      w-full
+                    "
+                    aria-haspopup="listbox"
+                    aria-expanded={isDropdownOpen}
+                  >
+                    <span className="flex-1 text-left whitespace-nowrap overflow-hidden text-ellipsis">
+                      {emailDomain}
+                    </span>
+                    <div
+                      className={`shrink-0 transition-transform duration-200 ${isDropdownOpen ? '-scale-y-100' : ''}`}
+                    >
+                      <ChevronDownIcon />
+                    </div>
+                  </button>
+                )}
+
+                {/* 드롭다운 목록 */}
+                {isDropdownOpen && (
+                  <ul
+                    role="listbox"
+                    aria-label="이메일 도메인 목록"
+                    className="
+                      absolute top-[calc(100%+4px)] left-0 right-0 z-50
+                      border border-border-default rounded-lg
+                      max-h-[264px] overflow-y-auto
+                      bg-background-page
+                      [scrollbar-width:thin]
+                      [&::-webkit-scrollbar]:w-1
+                      [&::-webkit-scrollbar-thumb]:bg-text-placeholder
+                      [&::-webkit-scrollbar-thumb]:rounded-full
+                      [&::-webkit-scrollbar-track]:transparent
+                    "
+                  >
+                    {EMAIL_DOMAIN_OPTIONS.map((domain) => (
+                      <li
+                        key={domain}
+                        role="option"
+                        aria-selected={
+                          domain ===
+                          (isCustomDomain ? '직접 입력' : emailDomain)
+                        }
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleDomainSelect(domain)}
+                          className="
+                            flex items-center w-full
+                            px-5 h-[66px]
+                            bg-background-page
+                            text-lg leading-6.5 font-semibold tracking-tight text-text-secondary
+                            hover:bg-background-hover
+                            transition-colors text-left
+                          "
+                        >
+                          {domain}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {/* 중복확인 버튼 */}
               {/*
-               * emailId가 비어 있으면 비활성화
+               * emailId가 비어 있거나 직접 입력 시 도메인이 비어 있으면 비활성화
                * TODO: API 연동 후 실제 중복 확인 요청으로 교체
                *       - 성공 시 setEmailChecked(true)
                *       - 실패(중복) 시 에러 메시지 표시
@@ -359,9 +488,9 @@ const JoinInfoPage = () => {
               <button
                 type="button"
                 onClick={() => {
-                  if (emailId.trim()) setEmailChecked(true);
+                  if (!isDuplicateCheckDisabled) setEmailChecked(true);
                 }}
-                disabled={!emailId.trim()}
+                disabled={isDuplicateCheckDisabled}
                 className="
                   shrink-0
                   bg-background-inverse text-text-inverse
@@ -427,14 +556,16 @@ const JoinInfoPage = () => {
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             rightSlot={
-              nicknameIsValid ? (
-                <Icon
-                  name="check-circle"
-                  size={24}
-                  color="var(--color-icon-success)"
-                  className="shrink-0"
-                />
-              ) : null
+              <Icon
+                name="check-circle-bg"
+                size={24}
+                color={
+                  nicknameIsValid
+                    ? 'var(--color-icon-success)'
+                    : 'var(--color-icon-disabled)'
+                }
+                className="shrink-0"
+              />
             }
           />
 
