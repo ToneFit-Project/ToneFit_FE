@@ -45,6 +45,9 @@ export const ROUTES = {
   HISTORY: '/home/history', // 교정 히스토리
   SETTINGS: '/home/settings', // 사용자 설정/프로필
   PRICING: '/home/pricing', // 요금제/결제
+
+  // 데모 (크롬 익스텐션 웹 데모 버전)
+  DEMO: '/demo',
 } as const;
 
 // =============================================================
