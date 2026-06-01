@@ -15,6 +15,9 @@ import EditorDonePage from '@/pages/home/EditorDonePage';
 // [DEV ONLY] 컴포넌트 확인 페이지
 import ComponentPage from '@/pages/dev/ComponentPage';
 // ─────────────────────────────────────────────────────────────────
+// 데모 페이지 (크롬 익스텐션 웹 데모)
+import DemoPage from '@/pages/demo/DemoPage';
+// ─────────────────────────────────────────────────────────────────
 
 /**
  * App
@@ -65,10 +68,10 @@ const App = () => {
 
   return (
     <Routes>
-      {/* 루트 경로: 교정하기로 임시 리다이렉트 */}
+      {/* 루트 경로: 데모 페이지로 리다이렉트 */}
       <Route
         path={ROUTES.HOME}
-        element={<Navigate to={ROUTES.EDITOR} replace />}
+        element={<Navigate to={ROUTES.DEMO} replace />}
       />
 
       {/* MVP를 위한 임시삭제 */}
@@ -126,6 +129,10 @@ const App = () => {
           (위의 import ComponentPage도 함께 주석 처리)
           빌드 사이즈 최소화를 위해 두 줄 모두 비활성화합니다. */}
       <Route path="/dev/components" element={<ComponentPage />} />
+      {/* ────────────────────────────────────────────────────── */}
+
+      {/* ── 데모 페이지 (크롬 익스텐션 웹 데모) ──────────────── */}
+      <Route path={ROUTES.DEMO} element={<DemoPage />} />
       {/* ────────────────────────────────────────────────────── */}
     </Routes>
   );
