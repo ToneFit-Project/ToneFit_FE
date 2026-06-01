@@ -21,8 +21,8 @@
   --color-text-warning: var(--color-text-warning);
   --color-text-danger: var(--color-text-danger);
   --color-text-info: var(--color-text-info);
-  --color-text-info-chip: var(--color-palette-brand-blue-700);
-  --color-text-info-chip-strong: var(--color-palette-brand-blue-600);
+  --color-text-info-chip: var(--color-info-700);
+  --color-text-info-chip-strong: var(--color-info-600);
 
   /* icon - text와 동일 */
   /* text-icon-primary */
@@ -43,6 +43,7 @@
   /* background */
   /* bg-background-page */
   --color-background-page: var(--color-background-page);
+  --color-background-page--20: var(--color-background-page--20);
   --color-background-surface: var(--color-background-surface);
   --color-background-subtle: var(--color-background-subtle);
   --color-background-muted: var(--color-background-muted);
@@ -55,13 +56,41 @@
   --color-background-pressed-2: var(--color-background-pressed-2);
   --color-background-brand: var(--color-background-brand);
   --color-background-brand-subtle: var(--color-background-brand-subtle);
+  /* Brand 인터랙션 토큰 (Color Roles에서 직접 참조) */
+  --color-background-brand-hover: var(--color-background-brand-hover);
+  --color-background-brand-pressed: var(--color-background-brand-pressed);
   --color-background-selected: var(--color-background-selected);
   --color-background-success-subtle: var(--color-background-success-subtle);
   --color-background-warning-subtle: var(--color-background-warning-subtle);
   --color-background-danger-subtle: var(--color-background-danger-subtle);
   --color-background-info-subtle: var(--color-background-info-subtle);
-  --color-background-info-chip: var(--color-palette-brand-blue-100);
+  --color-background-info-chip: var(--color-info-100);
   --color-background-load: var(--color-background-load);
+  --color-background-surface-raised: var(--color-background-surface-raised);
+  --color-background-overlay-default: var(--color-background-overlay-default);
+  --color-background-overlay-scrim-heavy: var(--color-background-overlay-scrim-heavy);
+  --color-background-overlay-scrim-medium: var(--color-background-overlay-scrim-medium);
+  --color-background-brand-default: var(--color-background-brand-default);
+  --color-background-status-success-subtle: var(--color-background-status-success-subtle);
+  --color-background-status-warning-subtle: var(--color-background-status-warning-subtle);
+  --color-background-status-danger-subtle: var(--color-background-status-danger-subtle);
+  --color-background-status-info-subtle: var(--color-background-status-info-subtle);
+
+  /* Action / Primary */
+  --color-action-primary-default: var(--color-action-primary-default);
+  --color-action-primary-hover: var(--color-action-primary-hover);
+  --color-action-primary-pressed: var(--color-action-primary-pressed);
+  --color-action-primary-disabled-background: var(--color-action-primary-disabled-background);
+  --color-action-primary-foreground: var(--color-action-primary-foreground);
+  --color-action-primary-disabled-foreground: var(--color-action-primary-disabled-foreground);
+
+  /* Badge */
+  --color-badge-brand-background: var(--color-badge-brand-background);
+  --color-badge-brand-foreground: var(--color-badge-brand-foreground);
+  --color-badge-brand-border: var(--color-badge-brand-border);
+  --color-badge-neutral-background: var(--color-badge-neutral-background);
+  --color-badge-neutral-foreground: var(--color-badge-neutral-foreground);
+  --color-badge-neutral-border: var(--color-badge-neutral-border);
 
   /* border */
   /* border-border-default */
@@ -74,43 +103,43 @@
   --color-border-brand: var(--color-border-brand);
   --color-border-success: var(--color-border-success);
   --color-border-info: var(--color-border-info);
-  --color-border-info-chip: var(--color-palette-brand-blue-200);
+  --color-border-info-chip: var(--color-info-200);
   --color-border-warning: var(--color-border-warning);
   --color-border-danger: var(--color-border-danger);
 
 
-  /* gray */
-  --color-gray-0: var(--color-palette-gray-0);
-  --color-gray-50: var(--color-palette-gray-50);
-  --color-gray-100: var(--color-palette-gray-100);
-  --color-gray-200: var(--color-palette-gray-200);
-  --color-gray-300: var(--color-palette-gray-300);
-  --color-gray-400: var(--color-palette-gray-400);
-  --color-gray-500: var(--color-palette-gray-500);
-  --color-gray-600: var(--color-palette-gray-600);
-  --color-gray-700: var(--color-palette-gray-700);
-  --color-gray-800: var(--color-palette-gray-800);
-  --color-gray-900: var(--color-palette-gray-900);
-  --color-gray-1000: var(--color-palette-gray-1000);
+  /* gray → Ink 팔레트로 이전 (하위 호환 유지) */
+  --color-gray-0: var(--color-ink-0);
+  --color-gray-50: var(--color-ink-50);
+  --color-gray-100: var(--color-ink-100);
+  --color-gray-200: var(--color-ink-200);
+  --color-gray-300: var(--color-ink-300);
+  --color-gray-400: var(--color-ink-400);
+  --color-gray-500: var(--color-ink-500);
+  --color-gray-600: var(--color-ink-600);
+  --color-gray-700: var(--color-ink-700);
+  --color-gray-800: var(--color-ink-800);
+  --color-gray-900: var(--color-ink-900);
+  --color-gray-1000: var(--color-ink-950);
 
-  /* aplph */
-  --color-white-alpha-4: var(--color-palette-white-alpha-4);
-  --color-white-alpha-8: var(--color-palette-white-alpha-8);
-  --color-white-alpha-12: var(--color-palette-white-alpha-12);
-  --color-white-alpha-16: var(--color-palette-white-alpha-16);
-  --color-white-alpha-24: var(--color-palette-white-alpha-24);
-  --color-white-alpha-32: var(--color-palette-white-alpha-32);
-  --color-white-alpha-48: var(--color-palette-white-alpha-48);
-  --color-white-alpha-64: var(--color-palette-white-alpha-64);
+  /* alpha */
+  --color-white-alpha-4: var(--color-alpha-white-4);
+  --color-white-alpha-8: var(--color-alpha-white-8);
+  --color-white-alpha-12: var(--color-alpha-white-12);
+  --color-white-alpha-16: var(--color-alpha-white-16);
+  --color-white-alpha-24: var(--color-alpha-white-24);
+  --color-white-alpha-32: var(--color-alpha-white-32);
+  --color-white-alpha-48: var(--color-alpha-white-48);
+  --color-white-alpha-64: var(--color-alpha-white-64);
 
-  --color-black-alpha-4: var(--color-palette-black-alpha-4);
-  --color-black-alpha-8: var(--color-palette-black-alpha-8);
-  --color-black-alpha-12: var(--color-palette-black-alpha-12);
-  --color-black-alpha-16: var(--color-palette-black-alpha-16);
-  --color-black-alpha-24: var(--color-palette-black-alpha-24);
-  --color-black-alpha-32: var(--color-palette-black-alpha-32);
-  --color-black-alpha-48: var(--color-palette-black-alpha-48);
-  --color-black-alpha-64: var(--color-palette-black-alpha-64);
+  --color-black-alpha-4: var(--color-alpha-black-4);
+  --color-black-alpha-8: var(--color-alpha-black-8);
+  --color-black-alpha-12: var(--color-alpha-black-12);
+  --color-black-alpha-16: var(--color-alpha-black-16);
+  --color-black-alpha-24: var(--color-alpha-black-24);
+  --color-black-alpha-32: var(--color-alpha-black-32);
+  --color-black-alpha-48: var(--color-alpha-black-48);
+  --color-black-alpha-64: var(--color-alpha-black-64);
 
 
   /* Font Size (Tailwind에 없는 것만) */
@@ -126,6 +155,15 @@
   --tracking-wide: var(--font-letter-spacing-wide);
 
 
+}
+
+/* 데모 헤더 sticky 상태 */
+.header.is-sticky {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.header.is-sticky .header__bg {
+  opacity: 1 !important;
 }
 
 /* 교정 하이라이트 클래스 */
@@ -154,6 +192,24 @@
 .mark-focus {
   --bg-alpha: 1;
 }
+
+img {
+  vertical-align: top;
+  border-style: none;
+  max-width: 100%;
+  /* normalize: IE10에서 링크 안 이미지 테두리 제거 */
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -o-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+}
+
 
 @keyframes slide-down {
   from {
