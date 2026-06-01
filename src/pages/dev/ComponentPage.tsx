@@ -19,6 +19,9 @@ import {
   Button,
   ButtonGroup,
   Stepper,
+  ButtonLongV2,
+  ButtonCheckLongV2,
+  ButtonTwoWayV2,
 } from '@/components/ui';
 import type { IconName, StepNumber } from '@/components/ui';
 
@@ -152,6 +155,21 @@ const BTN_CASES: {
   { label: 'Success', variant: 'success', text: 'Success' },
   { label: 'Danger', variant: 'danger', text: 'Danger' },
 ];
+
+// ButtonTwoWayV2 상태를 갖는 인라인 래퍼
+const ButtonTwoWayV2ViewToggle = () => {
+  const [val, setVal] = useState('original');
+  return (
+    <ButtonTwoWayV2
+      options={[
+        { value: 'original', label: '원문 보기' },
+        { value: 'corrected', label: '교정문 보기' },
+      ]}
+      value={val}
+      onChange={setVal}
+    />
+  );
+};
 
 // ─────────────────────────────────────────────────────────────────
 // 메인 컴포넌트
@@ -529,6 +547,128 @@ const ComponentPage = () => {
             </Case>
             <Case label="비활성화 (Disabled)">
               <Chip disabled>버튼</Chip>
+            </Case>
+          </CaseRow>
+        </Section>
+
+        {/* ─────────────────────────────── ButtonLongV2 ─── */}
+        <Section
+          title="ButtonLongV2"
+          description="전체 폭 CTA 버튼 v2 — Primary / Secondary / layout 조합"
+        >
+          <CaseRow>
+            <Case label="Primary / Label Only">
+              <div className="w-64">
+                <ButtonLongV2>이메일 생성하기</ButtonLongV2>
+              </div>
+            </Case>
+            <Case label="Primary / Icon + Label">
+              <div className="w-64">
+                <ButtonLongV2 layout="icon-label" icon="pencil-ai">
+                  이메일 생성하기
+                </ButtonLongV2>
+              </div>
+            </Case>
+            <Case label="Primary / Label + Icon">
+              <div className="w-64">
+                <ButtonLongV2 layout="label-icon" icon="arrow-right">
+                  다음으로
+                </ButtonLongV2>
+              </div>
+            </Case>
+          </CaseRow>
+
+          <SectionDivider />
+
+          <CaseRow>
+            <Case label="Primary / Loading">
+              <div className="w-64">
+                <ButtonLongV2 isLoading>이메일 생성 중</ButtonLongV2>
+              </div>
+            </Case>
+            <Case label="Primary / Disabled">
+              <div className="w-64">
+                <ButtonLongV2 disabled>생성하기</ButtonLongV2>
+              </div>
+            </Case>
+          </CaseRow>
+
+          <SectionDivider />
+
+          <CaseRow>
+            <Case label="Secondary / Label Only">
+              <div className="w-64">
+                <ButtonLongV2 variant="secondary">이메일 생성하기</ButtonLongV2>
+              </div>
+            </Case>
+            <Case label="Secondary / Icon + Label">
+              <div className="w-64">
+                <ButtonLongV2
+                  variant="secondary"
+                  layout="icon-label"
+                  icon="pencil-ai"
+                >
+                  이메일 생성하기
+                </ButtonLongV2>
+              </div>
+            </Case>
+            <Case label="Secondary / Label + Icon">
+              <div className="w-64">
+                <ButtonLongV2
+                  variant="secondary"
+                  layout="label-icon"
+                  icon="chevron-right"
+                >
+                  교정 결과 보기
+                </ButtonLongV2>
+              </div>
+            </Case>
+          </CaseRow>
+
+          <SectionDivider />
+
+          <CaseRow>
+            <Case label="Secondary / Disabled">
+              <div className="w-64">
+                <ButtonLongV2 variant="secondary" disabled>
+                  생성하기
+                </ButtonLongV2>
+              </div>
+            </Case>
+          </CaseRow>
+        </Section>
+
+        {/* ────────────────────────── ButtonCheckLongV2 ─── */}
+        <Section
+          title="ButtonCheckLongV2"
+          description="약관 동의 등 확인 의미가 강한 전체 폭 버튼 v2"
+        >
+          <CaseRow>
+            <Case label="Default">
+              <div className="w-72">
+                <ButtonCheckLongV2>약관에 모두 동의합니다</ButtonCheckLongV2>
+              </div>
+            </Case>
+            <Case label="Disabled">
+              <div className="w-72">
+                <ButtonCheckLongV2 disabled>
+                  약관에 모두 동의합니다
+                </ButtonCheckLongV2>
+              </div>
+            </Case>
+          </CaseRow>
+        </Section>
+
+        {/* ──────────────────────────── ButtonTwoWayV2 ─── */}
+        <Section
+          title="ButtonTwoWayV2"
+          description="2개 옵션 세그먼트 선택 버튼 v2"
+        >
+          <CaseRow align="start">
+            <Case label="원문 / 교정문 전환">
+              <div className="w-80">
+                <ButtonTwoWayV2ViewToggle />
+              </div>
             </Case>
           </CaseRow>
         </Section>

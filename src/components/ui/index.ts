@@ -40,6 +40,8 @@ export type { ButtonGroupProps, ButtonGroupOption } from './ButtonGroup';
 // ── 선택 컴포넌트 ────────────────────────────────────────────
 export { default as Chip } from './Chip';
 export type { ChipProps } from './Chip';
+export { default as ChipV2 } from './ChipV2';
+export type { ChipPropsV2 } from './ChipV2';
 
 export { default as Checkbox } from './Checkbox';
 export type { CheckboxProps } from './Checkbox';
@@ -47,3 +49,20 @@ export type { CheckboxProps } from './Checkbox';
 // ── 피드백 / 내비게이션 컴포넌트 ──────────────────────────────
 export { default as Stepper } from './Stepper';
 export type { StepperProps, StepNumber } from './Stepper';
+
+// ── v2 확장 레이아웃 버튼 ─────────────────────────────────────
+export { default as ButtonLongV2 } from './ButtonLongV2';
+export type {
+  ButtonLongV2Props,
+  ButtonLongV2Variant,
+  ButtonLongV2Layout,
+} from './ButtonLongV2';
+
+export { default as ButtonCheckLongV2 } from './ButtonCheckLongV2';
+export type { ButtonCheckLongV2Props } from './ButtonCheckLongV2';
+
+export { default as ButtonTwoWayV2 } from './ButtonTwoWayV2';
+export type {
+  ButtonTwoWayV2Props,
+  ButtonTwoWayV2Option,
+} from './ButtonTwoWayV2';
