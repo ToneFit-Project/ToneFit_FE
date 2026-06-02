@@ -70,9 +70,9 @@ const ButtonLongV2 = ({
   /* 변형별 베이스 색상 클래스 */
   const variantClasses: Record<ButtonLongV2Variant, string> = {
     primary:
-      'bg-background-brand text-text-inverse border border-background-brand ' +
-      'hover:bg-background-brand-hover hover:border-background-brand-hover ' +
-      'active:bg-background-brand-pressed active:border-background-brand-pressed',
+      'bg-action-primary-default text-text-inverse border-action-primary-default ' +
+      'hover:bg-action-primary-hover hover:border-action-primary-hover ' +
+      'active:bg-action-primary-pressed active:border-action-primary-pressed',
     secondary:
       'bg-background-surface text-text-brand border border-border-brand ' +
       'hover:bg-background-brand-subtle ' +
