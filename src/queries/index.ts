@@ -1,11 +1,10 @@
 /**
  * ToneFit TanStack Query 훅 모음
  *
- * useQuery  → 데이터 조회 (GET) — 캐싱, 자동 갱신 처리
- * useMutation → 데이터 변경 (POST/PUT/PATCH) — 성공 시 캐시 무효화
+ * API 명세 v0.53 기준
  *
- * QUERY_KEYS로 캐시를 관리하기 때문에
- * 같은 키의 데이터가 바뀌면 관련 컴포넌트가 자동으로 리렌더링돼요.
+ * useQuery    → 데이터 조회 (GET) — 캐싱, 자동 갱신 처리
+ * useMutation → 데이터 변경 (POST/PUT/PATCH) — 성공 시 캐시 무효화
  */
 
 import {
@@ -15,39 +14,32 @@ import {
   keepPreviousData,
 } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/constants';
-import type { HistoryParams, UpdateProfileRequest } from '@/types';
+import type { HistoryParams } from '@/types';
 import {
   // Users
   getMyProfile,
-  updateMyProfile,
+  toggleTerms,
   // Corrections
   saveDraft,
   getDraft,
   requestCorrection,
-  retryCorrection,
-  recorrect,
   rejectCorrection,
-  finalizeCorrection,
-  editCorrection,
   confirmCorrection,
+  // Generations
+  postGeneration,
   // History
   getInProgressSessions,
   getHistory,
   getSessionDetail,
-  // Credits
-  getCredits,
-  purchaseCredits,
-  subscribePlan,
 } from '@/api';
 import type {
   DraftRequest,
   CorrectionRequest,
-  RecorrectRequest,
   RejectRequest,
-  EditRequest,
   ConfirmRequest,
-  PurchaseCreditsRequest,
-  SubscribePlanRequest,
+  GenerationRequest,
+  ToggleTermsRequest,
+  TermsType,
 } from '@/types';
 
 // =============================================================
@@ -59,29 +51,33 @@ import type {
  *
  * 사용 예시:
  * const { data, isLoading } = useMyProfile();
- * data?.plan       // 'FREE' | 'PRO'
- * data?.free_used  // 오늘 사용한 무료 횟수
+ * data?.plan     // 'FREE' | 'PRO'
+ * data?.nickname // Google 프로필 이름
  */
 export const useMyProfile = () => {
   return useQuery({
     queryKey: QUERY_KEYS.USER_PROFILE,
     queryFn: getMyProfile,
-    // 로그인 상태에서만 조회 (토큰이 있을 때만)
-    staleTime: 1000 * 60 * 5, // 5분간 fresh 상태 유지 (불필요한 재요청 방지)
+    staleTime: 1000 * 60 * 5, // 5분간 fresh 상태 유지
   });
 };
 
 /**
- * 내 프로필 수정
- * 성공 시 프로필 캐시 자동 갱신
+ * 선택 약관 토글 (철회 / 재동의)
+ * 성공 시 프로필 캐시 갱신
  */
-export const useUpdateProfile = () => {
+export const useToggleTerms = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: UpdateProfileRequest) => updateMyProfile(data),
+    mutationFn: ({
+      type,
+      data,
+    }: {
+      type: TermsType;
+      data: ToggleTermsRequest;
+    }) => toggleTerms(type, data),
     onSuccess: () => {
-      // 프로필 캐시 무효화 → 자동으로 최신 데이터 재요청
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER_PROFILE });
     },
   });
@@ -99,14 +95,13 @@ export const useDraft = () => {
   return useQuery({
     queryKey: QUERY_KEYS.DRAFT,
     queryFn: getDraft,
-    // 404 에러(draft 없음)는 에러로 처리하지 않음
-    retry: false,
+    retry: false, // 404 (draft 없음)는 에러로 처리하지 않음
   });
 };
 
 /**
  * 임시저장 저장
- * 작성 중 자동저장 or 수동저장에 사용
+ * 작성 중 자동저장 또는 수동저장에 사용
  */
 export const useSaveDraft = () => {
   const queryClient = useQueryClient();
@@ -124,8 +119,8 @@ export const useSaveDraft = () => {
 // =============================================================
 
 /**
- * 1차 교정 요청
- * 성공 시 미완료 이력 캐시 무효화 (새 세션이 생겼으므로)
+ * 교정 요청
+ * 성공 시 미완료 이력 캐시 갱신 (새 세션 추가됨)
  */
 export const useRequestCorrection = () => {
   const queryClient = useQueryClient();
@@ -133,53 +128,10 @@ export const useRequestCorrection = () => {
   return useMutation({
     mutationFn: (data: CorrectionRequest) => requestCorrection(data),
     onSuccess: () => {
-      // 미완료 이력에 새 세션이 추가됐으므로 캐시 갱신
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.CORRECTIONS_IN_PROGRESS,
       });
-      // Draft도 초기화
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DRAFT });
-    },
-  });
-};
-
-/**
- * FAILED 세션 재시도
- * Gemini API 실패 후 다시 시도 — 과금 없음
- */
-export const useRetryCorrection = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (sessionId: number) => retryCorrection(sessionId),
-    onSuccess: (_, sessionId) => {
-      // 해당 세션 상세 캐시 무효화
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.CORRECTION_DETAIL(sessionId),
-      });
-    },
-  });
-};
-
-/**
- * 재교정 요청
- * reject한 교정 건에 대해 다시 교정 요청 (최대 3회)
- */
-export const useRecorrect = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      sessionId,
-      data,
-    }: {
-      sessionId: number;
-      data: RecorrectRequest;
-    }) => recorrect(sessionId, data),
-    onSuccess: (_, { sessionId }) => {
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.CORRECTION_DETAIL(sessionId),
-      });
     },
   });
 };
@@ -208,48 +160,8 @@ export const useRejectCorrection = () => {
 };
 
 /**
- * 최종 다듬기
- * 거절/수락이 확정된 후 AI 최종본 + 추천 제목 생성.
- * 성공 시 세션 상태 EDITING으로 전환.
- */
-export const useFinalizeCorrection = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (sessionId: number) => finalizeCorrection(sessionId),
-    onSuccess: (_, sessionId) => {
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.CORRECTION_DETAIL(sessionId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.CORRECTIONS_IN_PROGRESS,
-      });
-    },
-  });
-};
-
-/**
- * 사용자 편집 저장
- * Ctrl+C 감지 또는 저장 버튼 클릭 시 호출. 변경 필드만 전송.
- */
-export const useEditCorrection = () => {
-  return useMutation({
-    mutationFn: ({
-      sessionId,
-      data,
-    }: {
-      sessionId: number;
-      data: EditRequest;
-    }) => editCorrection(sessionId, data),
-  });
-};
-
-/**
- * 교정 확정 (복사하기)
- * 성공 시:
- * - 완료 이력 캐시 갱신 (새 CONFIRMED 세션 추가)
- * - 미완료 이력 캐시 갱신 (해당 세션 제거)
- * - 프로필 캐시 갱신 (free_used or credit_balance 차감)
+ * 교정 확정 (송신)
+ * 성공 시 완료·미완료 이력 캐시 갱신
  */
 export const useConfirmCorrection = () => {
   const queryClient = useQueryClient();
@@ -272,9 +184,21 @@ export const useConfirmCorrection = () => {
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.CORRECTION_DETAIL(sessionId),
       });
-      // 사용 횟수 or 크레딧 차감됐으므로 프로필도 갱신
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER_PROFILE });
     },
+  });
+};
+
+// =============================================================
+// 생성 (Generations)
+// =============================================================
+
+/**
+ * 이메일 생성
+ * 저장 없음 — 히스토리 미노출, 무료 횟수는 FE/localStorage 관리
+ */
+export const usePostGeneration = () => {
+  return useMutation({
+    mutationFn: (data: GenerationRequest) => postGeneration(data),
   });
 };
 
@@ -282,10 +206,7 @@ export const useConfirmCorrection = () => {
 // 교정 이력 (History)
 // =============================================================
 
-/**
- * 미완료 이력 조회 (IN_PROGRESS + FAILED)
- * 교정 결과 화면에서 이전에 완료 안 된 세션 확인용
- */
+/** 미완료 이력 조회 (IN_PROGRESS) */
 export const useInProgressSessions = () => {
   return useQuery({
     queryKey: QUERY_KEYS.CORRECTIONS_IN_PROGRESS,
@@ -298,7 +219,7 @@ export const useInProgressSessions = () => {
  * 페이지네이션 + 필터 지원
  *
  * 사용 예시:
- * const { data } = useHistory({ page: 1, size: 10, receiver_type: 'CLIENT' });
+ * const { data } = useHistory({ page: 1, size: 10 });
  * data?.total    // 전체 개수
  * data?.sessions // 현재 페이지 세션 목록
  */
@@ -306,70 +227,15 @@ export const useHistory = (params?: HistoryParams) => {
   return useQuery({
     queryKey: [...QUERY_KEYS.CORRECTIONS_HISTORY, params],
     queryFn: () => getHistory(params),
-    // 페이지 전환 시 이전 데이터 유지 (깜빡임 방지)
     placeholderData: keepPreviousData,
   });
 };
 
-/**
- * 교정 이력 상세 조회
- * 세션 ID로 특정 교정의 전체 내용 조회
- */
+/** 교정 이력 상세 조회 */
 export const useSessionDetail = (sessionId: number) => {
   return useQuery({
     queryKey: QUERY_KEYS.CORRECTION_DETAIL(sessionId),
     queryFn: () => getSessionDetail(sessionId),
-    enabled: !!sessionId, // sessionId가 있을 때만 요청
-  });
-};
-
-// =============================================================
-// 크레딧 & 결제 (Credits & Payments)
-// =============================================================
-
-/**
- * 크레딧 잔액 + 거래 내역 조회
- *
- * 사용 예시:
- * const { data } = useCredits();
- * data?.credit_balance  // 잔액
- * data?.transactions    // 거래 내역 배열
- */
-export const useCredits = () => {
-  return useQuery({
-    queryKey: QUERY_KEYS.CREDITS,
-    queryFn: getCredits,
-  });
-};
-
-/**
- * 크레딧 구매
- * 성공 시 크레딧 잔액 + 프로필 캐시 갱신
- * (프로필에도 credit_balance가 포함되어 있어서 둘 다 갱신)
- */
-export const usePurchaseCredits = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: PurchaseCreditsRequest) => purchaseCredits(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CREDITS });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER_PROFILE });
-    },
-  });
-};
-
-/**
- * PRO 플랜 구독
- * 성공 시 프로필 캐시 갱신 (plan: FREE → PRO 변경)
- */
-export const useSubscribePlan = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: SubscribePlanRequest) => subscribePlan(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER_PROFILE });
-    },
+    enabled: !!sessionId,
   });
 };

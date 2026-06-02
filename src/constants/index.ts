@@ -45,6 +45,9 @@ export const ROUTES = {
   HISTORY: '/home/history', // 교정 히스토리
   SETTINGS: '/home/settings', // 사용자 설정/프로필
   PRICING: '/home/pricing', // 요금제/결제
+
+  // 데모 (크롬 익스텐션 웹 데모 버전)
+  DEMO: '/demo',
 } as const;
 
 // =============================================================
@@ -59,7 +62,6 @@ export const QUERY_KEYS = {
   CORRECTIONS_HISTORY: ['corrections', 'history'] as const,
   CORRECTION_DETAIL: (sessionId: number) =>
     ['corrections', 'detail', sessionId] as const,
-  CREDITS: ['credits'] as const,
 } as const;
 
 // =============================================================
@@ -70,7 +72,6 @@ export const QUERY_KEYS = {
 export const INPUT_LIMITS = {
   EMAIL_MIN_LENGTH: 10, // 원문 최소 글자 수
   EMAIL_MAX_LENGTH: 2000, // 원문 최대 글자 수
-  PASSWORD_MIN_LENGTH: 8, // 비밀번호 최소 글자 수
 } as const;
 
 // =============================================================
@@ -79,7 +80,6 @@ export const INPUT_LIMITS = {
 
 export const CORRECTION_LIMITS = {
   FREE_DAILY_LIMIT: 1, // 무료 플랜 하루 교정 횟수
-  MAX_RECORRECTIONS: 3, // 세션당 최대 재교정 횟수
 } as const;
 
 // =============================================================
@@ -214,18 +214,20 @@ export const STORAGE_KEYS = {
    */
   ACCESS_TOKEN: 'tf_access_token',
   /**
-   * 갱신 토큰 (익명 + 정식 회원 공용)
-   * 저장 위치: localStorage — 브라우저 재시작 후에도 유지 (30일)
-   */
-  REFRESH_TOKEN: 'tf_refresh_token',
-  /**
    * 익명 사용자 토큰 (anonymous_token)
    * 저장 위치: localStorage — 익명 세션 재식별용, 브라우저 재시작 후에도 유지
+   * refresh_token은 HttpOnly Cookie로 자동 관리 — FE에서 직접 다루지 않음
    */
-  ANON_TOKEN: 'tf_anon_token',
+  ANONYMOUS_TOKEN: 'tf_anon_token',
   /**
    * 암호화된 이메일 초안
    * 저장 위치: localStorage — AES-GCM 암호문 (base64)
    */
   DRAFT_CIPHER: 'tf_draft_cipher',
+  /**
+   * Google OAuth 진행 중 임시 보관 id_token
+   * 저장 위치: sessionStorage — 약관 동의 페이지로 이동할 때만 사용
+   * 약관 동의 완료 또는 실패 시 즉시 삭제
+   */
+  PENDING_ID_TOKEN: 'tf_pending_id_token',
 } as const;

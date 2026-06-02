@@ -2,15 +2,13 @@ import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Icon, TitleText } from '@/components/ui';
 import { ROUTES } from '@/constants';
-import { useFinalizeCorrection, useConfirmCorrection } from '@/queries';
-import type { AxiosError } from 'axios';
+import { useConfirmCorrection } from '@/queries';
 import type {
   ReceiverType,
   PurposeType,
   CorrectionChange,
   FeedbackActionType,
   CorrectionResponse,
-  FinalizeResponse,
 } from '@/types';
 
 // true: 디자인 확인용 — API 호출 및 페이지 이동 없이 로딩 화면 유지
@@ -31,7 +29,6 @@ const EditorConfirmLoadingPage = () => {
   const location = useLocation();
   const state = location.state as LocationState | null;
 
-  const { mutateAsync: finalizeAsync } = useFinalizeCorrection();
   const { mutateAsync: confirmAsync } = useConfirmCorrection();
   const cancelledRef = useRef(false);
   // StrictMode 이중 실행 방지: API 호출 자체를 한 번만 허용
@@ -54,33 +51,7 @@ const EditorConfirmLoadingPage = () => {
     calledRef.current = true;
 
     const run = async () => {
-      // Step 1: finalize → EDITING 상태로 전환 (ai_final, ai_subject 반환)
-      // 400이면 이미 EDITING 상태(뒤로가기 후 재시도 등) → finalize 건너뛰고 confirm으로 진행
-      let finalizeData: FinalizeResponse | undefined;
-      try {
-        finalizeData = await finalizeAsync(state.sessionId);
-      } catch (error) {
-        const status = (error as AxiosError)?.response?.status;
-        if (status !== 400) {
-          // finalize 실패 (400 제외) → 결과 페이지로 복귀
-          if (cancelledRef.current) return;
-          navigate(ROUTES.EDITOR_RESULT, {
-            state: {
-              correctionData: state.correctionData,
-              originalEmail: state.originalEmail,
-              receiverType: state.receiverType,
-              purposeType: state.purposeType,
-            },
-            replace: true,
-          });
-          return;
-        }
-        // 400: 이미 EDITING 상태 → finalizeData 없이 confirm 진행
-      }
-
-      if (cancelledRef.current) return;
-
-      // Step 2: confirm → CONFIRMED 상태로 전환
+      // confirm → CONFIRMED 상태로 전환 (v0.53: finalize 단계 없음)
       try {
         await confirmAsync({
           sessionId: state.sessionId,
@@ -110,8 +81,6 @@ const EditorConfirmLoadingPage = () => {
         state: {
           sessionId: state.sessionId,
           finalEmail: state.finalEmail,
-          aiFinal: finalizeData?.ai_final,
-          aiSubject: finalizeData?.ai_subject,
           receiverType: state.receiverType,
           purposeType: state.purposeType,
           changes: state.changes,

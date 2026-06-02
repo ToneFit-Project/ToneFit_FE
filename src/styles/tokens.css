@@ -22,91 +22,88 @@
      📦 COLOR PALETTE
      기본 색상 원본값 - 직접 사용보다 Color Roles 권장
      ==================================================== */
-   /* gray */
-   --color-palette-gray-0: #FFFFFF;
-   --color-palette-gray-50: #F9FAFB;
-   --color-palette-gray-100: #F3F4F6;
-   --color-palette-gray-200: #E5E7EB;
-   --color-palette-gray-300: #D1D5DB;
-   --color-palette-gray-400: #9CA3AF;
-   --color-palette-gray-500: #6B7280;
-   --color-palette-gray-600: #4B5563;
-   --color-palette-gray-700: #374151;
-   --color-palette-gray-800: #1F2937;
-   --color-palette-gray-900: #111827;
-   --color-palette-gray-1000: #030712;
-   /* brand-blue */
-   --color-palette-brand-blue-50: #EEF4FF;
-   --color-palette-brand-blue-100: #DCE8FF;
-   --color-palette-brand-blue-200: #B9D1FF;
-   --color-palette-brand-blue-300: #8DB4FF;
-   --color-palette-brand-blue-400: #5E91FF;
-   --color-palette-brand-blue-500: #3366FF;
-   --color-palette-brand-blue-600: #2954D6;
-   --color-palette-brand-blue-700: #1F42AD;
-   --color-palette-brand-blue-800: #18348A;
 
-   /* brand-green */
-   --color-palette-brand-green-50: #EEF9F1;
-   --color-palette-brand-green-100: #D9F2E1;
-   --color-palette-brand-green-200: #B4E5C4;
-   --color-palette-brand-green-300: #7FD39D;
-   --color-palette-brand-green-400: #49BC72;
-   --color-palette-brand-green-500: #22A559;
-   --color-palette-brand-green-600: #1B8A4A;
-   --color-palette-brand-green-700: #166F3C;
-   --color-palette-brand-green-800: #125A31;
+   /* Ink (formerly gray) */
+   --color-ink-0: #FFFFFF;
+   --color-ink-25: #FCFCFD;
+   --color-ink-50: #F8F8FB;
+   --color-ink-50--20: #F8F8FB33;
+   --color-ink-100: #F1F2F6;
+   --color-ink-200: #E5E7EF;
+   --color-ink-300: #D2D6E1;
+   --color-ink-400: #9AA1B2;
+   --color-ink-500: #6B7284;
+   --color-ink-600: #4B5263;
+   --color-ink-700: #303849;
+   --color-ink-800: #5130B8;
+   --color-ink-900: #111827;
+   --color-ink-950: #030712;
 
-   /* brand-purple */
-   --color-palette-brand-purple-50: #F5F1FF;
-   --color-palette-brand-purple-100: #E9DFFF;
-   --color-palette-brand-purple-200: #D3BEFF;
-   --color-palette-brand-purple-300: #B896FF;
-   --color-palette-brand-purple-400: #9A6CFF;
-   --color-palette-brand-purple-500: #7C4DFF;
-   --color-palette-brand-purple-600: #673FDB;
-   --color-palette-brand-purple-700: #5433B5;
-   --color-palette-brand-purple-800: #452A94;
+   /* Brand / Purple */
+   --color-brand-purple-25: #FBFAFF;
+   --color-brand-purple-50: #F6F2FF;
+   --color-brand-purple-100: #EEE7FF;
+   --color-brand-purple-200: #DCCEFF;
+   --color-brand-purple-300: #BFA7FF;
+   --color-brand-purple-400: #9B78FF;
+   --color-brand-purple-500: #7C4DFF;
+   --color-brand-purple-600: #673FDB;
+   --color-brand-purple-700: #5130B8;
+   --color-brand-purple-800: #3D258C;
+   --color-brand-purple-900: #281A5A;
 
-   /* state */
-   --color-palette-success-50: #F4FBF6;
-   --color-palette-success-100: #EAF8EF;
-   --color-palette-success-200: #C9EDD7;
-   --color-palette-success-400: var(--color-palette-brand-green-400);
-   --color-palette-success-500: #1F9D55;
-   --color-palette-success-700: #15703D;
+   /* Info */
+   --color-info-50: #EFF6FF;
+   --color-info-100: #DBEAFE;
+   --color-info-200: #BFDBFE;
+   --color-info-300: #93C5FD;
+   --color-info-400: #60A5FA;
+   --color-info-500: #3B82F6;
+   --color-info-600: #2563EB;
+   --color-info-700: #1D4ED8;
+   --color-info-800: #1E40AF;
 
-   --color-palette-warning-50: #FFF9ED;
-   --color-palette-warning-100: #FFF6E5;
-   --color-palette-warning-200: #F7D9A0;
-   --color-palette-warning-500: #D98E04;
-   --color-palette-warning-700: #9B6500;
+   /* Success */
+   --color-success-50: #F1FCF6;
+   --color-success-100: #DCF8E8;
+   --color-success-200: #B7EFD1;
+   --color-success-500: #16A36A;
+   --color-success-700: #0E734A;
 
-   --color-palette-danger-100: #FDECEC;
-   --color-palette-danger-500: #D92D20;
-   --color-palette-danger-50: #FEF3F2;
-   --color-palette-danger-200: #F7C5C1;
-   --color-palette-danger-700: #9F1F16;
+   /* Warning */
+   --color-warning-50: #FFF8ED;
+   --color-warning-100: #FFF0D9;
+   --color-warning-200: #FFD7A3;
+   --color-warning-500: #D9822B;
+   --color-warning-700: #96531B;
 
-   /* black-alpha */
-   --color-palette-black-alpha-4: rgba(0, 0, 0, 0.04);
-   --color-palette-black-alpha-8: rgba(0, 0, 0, 0.08);
-   --color-palette-black-alpha-12: rgba(0, 0, 0, 0.12);
-   --color-palette-black-alpha-16: rgba(0, 0, 0, 0.16);
-   --color-palette-black-alpha-24: rgba(0, 0, 0, 0.24);
-   --color-palette-black-alpha-32: rgba(0, 0, 0, 0.32);
-   --color-palette-black-alpha-48: rgba(0, 0, 0, 0.48);
-   --color-palette-black-alpha-64: rgba(0, 0, 0, 0.64);
+   /* Danger */
+   --color-danger-50: #FFF1F2;
+   --color-danger-100: #FFE4E7;
+   --color-danger-200: #FECDD3;
+   --color-danger-500: #E5484D;
+   --color-danger-700: #B4232A;
 
-   /* white-alpha */
-   --color-palette-white-alpha-4: rgba(255, 255, 255, 0.04);
-   --color-palette-white-alpha-8: rgba(255, 255, 255, 0.08);
-   --color-palette-white-alpha-12: rgba(255, 255, 255, 0.12);
-   --color-palette-white-alpha-16: rgba(255, 255, 255, 0.16);
-   --color-palette-white-alpha-24: rgba(255, 255, 255, 0.24);
-   --color-palette-white-alpha-32: rgba(255, 255, 255, 0.32);
-   --color-palette-white-alpha-48: rgba(255, 255, 255, 0.48);
-   --color-palette-white-alpha-64: rgba(255, 255, 255, 0.64);
+   /* Alpha / Black */
+   --color-alpha-black-4: rgba(0, 0, 0, 0.04);
+   --color-alpha-black-8: rgba(0, 0, 0, 0.08);
+   --color-alpha-black-12: rgba(0, 0, 0, 0.12);
+   --color-alpha-black-16: rgba(0, 0, 0, 0.16);
+   --color-alpha-black-24: rgba(0, 0, 0, 0.24);
+   --color-alpha-black-32: rgba(0, 0, 0, 0.32);
+   --color-alpha-black-48: rgba(0, 0, 0, 0.48);
+   --color-alpha-black-64: rgba(0, 0, 0, 0.64);
+
+   /* Alpha / White */
+   --color-alpha-white-4: rgba(255, 255, 255, 0.04);
+   --color-alpha-white-8: rgba(255, 255, 255, 0.08);
+   --color-alpha-white-12: rgba(255, 255, 255, 0.12);
+   --color-alpha-white-16: rgba(255, 255, 255, 0.16);
+   --color-alpha-white-24: rgba(255, 255, 255, 0.24);
+   --color-alpha-white-32: rgba(255, 255, 255, 0.32);
+   --color-alpha-white-48: rgba(255, 255, 255, 0.48);
+   --color-alpha-white-64: rgba(255, 255, 255, 0.64);
+
 
    /* ====================================================
      🎭 COLOR ROLES
@@ -121,68 +118,112 @@
      ==================================================== */
 
    /* Background */
-   --color-background-page: var(--color-palette-gray-0);
-   --color-background-surface: var(--color-palette-gray-0);
-   --color-background-surface-raised: var(--color-palette-gray-0);
-   --color-background-subtle: var(--color-palette-gray-50);
-   --color-background-muted: var(--color-palette-gray-100);
-   --color-background-disabled: var(--color-palette-gray-100);
-   --color-background-overlay: var(--color-palette-black-alpha-48);
-   --color-background-inverse: var(--color-palette-gray-900);
-   --color-background-hover: var(--color-palette-gray-50);
-   --color-background-pressed: var(--color-palette-gray-100);
-   --color-background-hover-2: rgba(17, 24, 39, 0.8);
-   --color-background-pressed-2: rgba(17, 24, 39, 0.6);
-   --color-background-brand: var(--color-palette-brand-purple-500);
-   --color-background-brand-subtle: var(--color-palette-brand-purple-50);
-   --color-background-selected: var(--color-palette-brand-blue-50);
-   --color-background-success-subtle: var(--color-palette-success-50);
-   --color-background-warning-subtle: var(--color-palette-warning-50);
-   --color-background-danger-subtle: var(--color-palette-danger-50);
-   --color-background-info-subtle: var(--color-palette-brand-blue-50);
-   --color-background-load: var(--color-palette-brand-blue-400);
+   --color-background-page: var(--color-ink-50);
+   --color-background-page--20: var(--color-ink-50--20);
+   --color-background-surface: var(--color-ink-0);
+   --color-background-surface-raised: var(--color-ink-0);
+   --color-background-subtle: var(--color-ink-25);
+   --color-background-muted: var(--color-ink-100);
+   --color-background-disabled: var(--color-ink-100);
+   --color-background-overlay-default: var(--color-alpha-black-48);
+   --color-background-overlay-scrim-heavy: var(--color-alpha-black-64);
+   --color-background-overlay-scrim-medium: var(--color-alpha-black-48);
+   --color-background-inverse: var(--color-ink-900);
+   --color-background-hover: var(--color-ink-25);
+   --color-background-pressed: var(--color-ink-100);
+   --color-background-brand-100: var(--color-brand-purple-100);
+   --color-background-brand-400: var(--color-brand-purple-400);
+   --color-background-brand-default: var(--color-brand-purple-500);
+   --color-background-brand-hover: var(--color-brand-purple-600);
+   --color-background-brand-pressed: var(--color-brand-purple-700);
+   --color-background-brand-subtle: var(--color-brand-purple-50);
+   --color-background-selected: var(--color-brand-purple-50);
+   --color-background-status-success-subtle: var(--color-success-50);
+   --color-background-status-warning-subtle: var(--color-warning-50);
+   --color-background-status-danger-subtle: var(--color-danger-50);
+   --color-background-status-info-subtle: var(--color-info-50);
 
    /* Text */
-   --color-text-primary: var(--color-palette-gray-900);
-   --color-text-secondary: var(--color-palette-gray-700);
-   --color-text-tertiary: var(--color-palette-gray-500);
-   --color-text-disabled: var(--color-palette-gray-400);
-   --color-text-placeholder: var(--color-palette-gray-400);
-   --color-text-inverse: var(--color-palette-gray-0);
-   --color-text-brand: var(--color-palette-brand-purple-600);
-   --color-text-brand-strong: var(--color-palette-brand-purple-700);
-   --color-text-success: var(--color-palette-success-400);
-   --color-text-warning: var(--color-palette-warning-700);
-   --color-text-danger: var(--color-palette-danger-500);
-   --color-text-info: var(--color-palette-brand-blue-500);
+   --color-text-primary: var(--color-ink-900);
+   --color-text-secondary: var(--color-ink-700);
+   --color-text-tertiary: var(--color-ink-500);
+   --color-text-disabled: var(--color-ink-300);
+   --color-text-placeholder: var(--color-ink-400);
+   --color-text-inverse: var(--color-ink-0);
+   --color-text-brand: var(--color-brand-purple-600);
+   --color-text-brand-strong: var(--color-brand-purple-700);
+   --color-text-success: var(--color-success-500);
+   --color-text-warning: var(--color-warning-500);
+   --color-text-danger: var(--color-danger-500);
+   --color-text-info: var(--color-info-500);
 
    /* Icon */
-   --color-icon-primary: var(--color-palette-gray-900);
-   --color-icon-secondary: var(--color-palette-gray-700);
-   --color-icon-tertiary: var(--color-palette-gray-500);
-   --color-icon-disabled: var(--color-palette-gray-400);
-   --color-icon-placeholder: var(--color-palette-gray-400);
-   --color-icon-inverse: var(--color-palette-gray-0);
-   --color-icon-brand: var(--color-palette-brand-purple-600);
-   --color-icon-brand-strong: var(--color-palette-brand-purple-700);
-   --color-icon-success: var(--color-palette-success-400);
-   --color-icon-warning: var(--color-palette-warning-700);
-   --color-icon-danger: var(--color-palette-danger-500);
-   --color-icon-info: var(--color-palette-brand-blue-500);
-   --color-icon-load: var(--color-palette-brand-blue-400);
+   --color-icon-primary: var(--color-ink-800);
+   --color-icon-secondary: var(--color-ink-500);
+   --color-icon-tertiary: var(--color-ink-400);
+   --color-icon-disabled: var(--color-ink-300);
+   --color-icon-placeholder: var(--color-ink-400);
+   --color-icon-inverse: var(--color-ink-0);
+   --color-icon-brand: var(--color-brand-purple-500);
+   --color-icon-brand-strong: var(--color-brand-purple-700);
+   --color-icon-success: var(--color-success-500);
+   --color-icon-warning: var(--color-warning-500);
+   --color-icon-danger: var(--color-danger-500);
+   --color-icon-info: var(--color-info-500);
 
    /* Border */
-   --color-border-default: var(--color-palette-gray-200);
-   --color-border-subtle: var(--color-palette-gray-100);
-   --color-border-strong: var(--color-palette-gray-300);
-   --color-border-disabled: var(--color-palette-gray-200);
-   --color-border-inverse: var(--color-palette-black-alpha-16);
-   --color-border-focus: var(--color-palette-brand-blue-400);
-   --color-border-brand: var(--color-palette-brand-purple-500);
-   --color-border-success: var(--color-palette-success-200);
-   --color-border-warning: var(--color-palette-warning-200);
-   --color-border-danger: var(--color-palette-danger-200);
-   --color-border-info: var(--color-palette-brand-blue-200);
+   --color-border-default: var(--color-ink-200);
+   --color-border-subtle: var(--color-ink-100);
+   --color-border-strong: var(--color-ink-300);
+   --color-border-disabled: var(--color-ink-200);
+   --color-border-inverse: var(--color-alpha-white-24);
+   --color-border-focus: var(--color-brand-purple-500);
+   --color-border-brand: var(--color-brand-purple-300);
+   --color-border-success: var(--color-success-200);
+   --color-border-warning: var(--color-warning-200);
+   --color-border-danger: var(--color-danger-200);
+   --color-border-info: var(--color-info-200);
+
+   /* Action / Primary */
+   --color-action-primary-default: var(--color-brand-purple-500);
+   --color-action-primary-hover: var(--color-brand-purple-600);
+   --color-action-primary-pressed: var(--color-brand-purple-700);
+   --color-action-primary-disabled-background: var(--color-ink-100);
+   --color-action-primary-foreground: var(--color-ink-0);
+   --color-action-primary-disabled-foreground: var(--color-ink-400);
+
+   /* Badge / Brand */
+   --color-badge-brand-background: var(--color-brand-purple-50);
+   --color-badge-brand-foreground: var(--color-brand-purple-600);
+   --color-badge-brand-border: var(--color-brand-purple-300);
+
+   /* Badge / Neutral */
+   --color-badge-neutral-background: var(--color-ink-100);
+   --color-badge-neutral-foreground: var(--color-ink-600);
+   --color-badge-neutral-border: var(--color-ink-200);
+
+
+   /* ====================================================
+     🔁 BACKWARD COMPAT ALIASES
+     이름이 변경된 변수에 대한 하위 호환 별칭
+     기존 코드가 계속 작동하도록 유지합니다.
+     ==================================================== */
+
+   /* 리네임된 Background 변수 */
+   --color-background-brand: var(--color-background-brand-default);
+   --color-background-overlay: var(--color-background-overlay-default);
+   --color-background-success-subtle: var(--color-background-status-success-subtle);
+   --color-background-warning-subtle: var(--color-background-status-warning-subtle);
+   --color-background-danger-subtle: var(--color-background-status-danger-subtle);
+   --color-background-info-subtle: var(--color-background-status-info-subtle);
+
+   /* 삭제된 hover-2 / pressed-2 (레거시, 코드베이스에서 아직 사용 중) */
+   --color-background-hover-2: rgba(17, 24, 39, 0.8);
+   --color-background-pressed-2: rgba(17, 24, 39, 0.6);
+
+   /* 로딩 애니메이션 전용 (Figma 미포함, 기존 로딩 페이지에서 사용) */
+   --color-icon-load: var(--color-info-400);
+   --color-background-load: var(--color-info-400);
 
 
    /* ====================================================
