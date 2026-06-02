@@ -14,7 +14,6 @@ import {
   RECEIVER_TYPE_LABELS,
   PURPOSE_LABELS,
 } from '@/constants';
-import { useRecorrect } from '@/queries';
 import { MOCK_ORIGINAL, MOCK_CORRECTION_RESPONSE } from '@/mocks/handlers';
 import type {
   CorrectionResponse,
@@ -685,7 +684,7 @@ const EditorResultPage = () => {
   // MVP 단계 임시 삭제
   // const [copied, setCopied] = useState(false);
 
-  const { mutate: recorrect, isPending: isRecorrecting } = useRecorrect();
+  const isRecorrecting = false; // 재교정 기능 미사용 (MVP 단계)
   const isConfirming = false; // 확정은 별도 로딩 페이지에서 처리
 
   const { correctionData, originalEmail, receiverType, purposeType } = state;
@@ -733,21 +732,8 @@ const EditorResultPage = () => {
     if (currentIndex < totalChanges - 1) setCurrentIndex((i) => i + 1);
   }, [currentIndex, totalChanges]);
 
-  const handleRecorrect = () => {
-    const rejects = changes
-      .filter((c) => c.action === 'REJECTED')
-      .map((c) => ({ index: c.index }));
-
-    recorrect(
-      { sessionId: correctionData.session_id, data: { rejects } },
-      {
-        onSuccess: (data) => {
-          setChanges(data.changes.map((c) => ({ ...c, action: null })));
-          setCurrentIndex(0);
-        },
-      }
-    );
-  };
+  // 재교정(recorrect)은 MVP 단계에서 미사용 — 버튼은 hidden! 처리됨
+  const handleRecorrect = () => {};
 
   const handleConfirm = () => {
     // 원문을 베이스로, ACCEPTED 변경만 역순(뒤→앞)으로 적용해 최종 이메일 구성
