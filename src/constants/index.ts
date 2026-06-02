@@ -5,15 +5,7 @@
  * 상수로 관리하면 오타를 줄이고, 값이 바뀌면 여기만 수정하면 돼요.
  */
 
-import type {
-  ReceiverType,
-  PurposeType,
-  IndustryType,
-  CompanySizeType,
-  JobLevelType,
-  CareerYearType,
-  CorrectionLabelType,
-} from '@/types';
+import type { ReceiverType, PurposeType, CorrectionLabelType } from '@/types';
 
 // =============================================================
 // 라우팅 경로
@@ -106,41 +98,6 @@ export const PURPOSE_LABELS: Record<PurposeType, string> = {
   DECLINE: '거절',
 };
 
-/** 업종 한국어 라벨 */
-export const INDUSTRY_LABELS: Record<IndustryType, string> = {
-  IT: 'IT & 스타트업',
-  MANUFACTURING: '제조',
-  FINANCE: '금융 & 보험',
-  PUBLIC: '공공기관',
-  SERVICE: '서비스',
-  OTHER: '기타',
-};
-
-/** 회사 규모 한국어 라벨 */
-export const COMPANY_SIZE_LABELS: Record<CompanySizeType, string> = {
-  LARGE: '대기업',
-  MEDIUM: '중견기업',
-  SMALL: '중소기업',
-  STARTUP: '스타트업',
-};
-
-/** 직급 한국어 라벨 */
-export const JOB_LEVEL_LABELS: Record<JobLevelType, string> = {
-  INTERN: '인턴',
-  STAFF: '사원',
-  SENIOR: '대리',
-  MANAGER: '매니저',
-};
-
-/** 연차 한국어 라벨 */
-export const CAREER_YEAR_LABELS: Record<CareerYearType, string> = {
-  LESS_THAN_1: '1년 미만 (신입)',
-  YEAR_1: '1년차',
-  YEAR_2: '2년차',
-  YEAR_3: '3년차',
-  YEAR_4_OR_MORE: '4년 이상',
-};
-
 /**
  * 교정 계층 라벨 정보
  * label: 사용자에게 보이는 이름
@@ -198,7 +155,7 @@ export const VALIDATION_MESSAGES = {
   EMAIL_TOO_LONG: `이메일 원문은 ${INPUT_LIMITS.EMAIL_MAX_LENGTH}자 이내로 입력해 주세요.`,
   EMAIL_INCOMPLETE_CHARS:
     '교정할 수 없는 내용이에요. 완성된 글자를 입력해 주세요.',
-  PASSWORD_TOO_SHORT: `비밀번호는 ${INPUT_LIMITS.PASSWORD_MIN_LENGTH}자 이상이어야 합니다.`,
+  PASSWORD_TOO_SHORT: '비밀번호는 8자 이상이어야 합니다.',
   EMAIL_INVALID: '올바른 이메일 주소를 입력해 주세요.',
 } as const;
 

@@ -678,9 +678,8 @@ const EditorResultPage = () => {
       rejectReason?: string;
     })[]
   >(() => state?.correctionData.changes ?? []);
-  const [correctedEmail] = useState(
-    () => state?.correctionData.corrected_email ?? ''
-  );
+  // corrected_email은 v0.53에서 제거됨 — MVP 단계에서는 미사용
+  const [correctedEmail] = useState('');
   // MVP 단계 임시 삭제
   // const [copied, setCopied] = useState(false);
 

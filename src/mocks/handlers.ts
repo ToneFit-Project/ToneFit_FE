@@ -11,10 +11,10 @@ const MOCK_ORIGINAL =
 const MOCK_CORRECTED =
   '김철수 팀장님께,\n안녕하십니까, 마케팅팀 윤서연입니다.\n웹사이트 리뉴얼 프로젝트 관련하여 보고드리겠습니다.\n외주업체에서 보내줄 견적서가 아직 도착하지 않아 일정이 지연되고 있는 상황입니다.\n확인되었으며, 빠른 시일 내로 전달드리겠습니다.\n검토 부탁드리겠습니다.';
 
+export const MOCK_CORRECTED_EMAIL = MOCK_CORRECTED;
+
 export const MOCK_CORRECTION_RESPONSE: CorrectionResponse = {
   session_id: 1,
-  round: 1,
-  corrected_email: MOCK_CORRECTED,
   changes: [
     {
       index: 0,
@@ -25,6 +25,8 @@ export const MOCK_CORRECTION_RESPONSE: CorrectionResponse = {
       reason:
         '상대방의 행동에 대한 과도한 높임 표현인 보내드리실은 비즈니스 문법에 어긋납니다. 보내줄 또는 보내주실로 수정하는 것이 자연스럽습니다. (국립국어원 표준 언어 예절)',
       label: 'AUTO',
+      confidence: 0.95,
+      applied_rules: ['HONORIFIC_OVERUSE'],
       action: null,
     },
     {
@@ -36,6 +38,8 @@ export const MOCK_CORRECTION_RESPONSE: CorrectionResponse = {
       reason:
         "확인되어졌으며는 피동 표현이 이중으로 겹친 비문입니다. '확인되었으며'로 단순화하는 것이 올바른 표현입니다. (국립국어원 온라인 가나다)",
       label: 'AUTO',
+      confidence: 0.98,
+      applied_rules: ['DOUBLE_PASSIVE'],
       action: null,
     },
     {
@@ -47,6 +51,8 @@ export const MOCK_CORRECTION_RESPONSE: CorrectionResponse = {
       reason:
         "'빠른 시일 내로'가 현대 표준 국어 문법에서 더 자연스러운 표현입니다. (국립국어원 온라인 가나다)",
       label: 'SUGGEST',
+      confidence: 0.8,
+      applied_rules: ['PARTICLE_CORRECTION'],
       action: null,
     },
     {
@@ -58,6 +64,8 @@ export const MOCK_CORRECTION_RESPONSE: CorrectionResponse = {
       reason:
         '전달드리도록 하겠습니다 보다 전달드리겠습니다가 더 간결하고 명확한 표현입니다.',
       label: 'STYLE',
+      confidence: 0.75,
+      applied_rules: ['CONCISENESS'],
       action: null,
     },
     {
@@ -69,6 +77,8 @@ export const MOCK_CORRECTION_RESPONSE: CorrectionResponse = {
       reason:
         '부탁드리실게요는 표준어가 아닌 구어체 표현입니다. 비즈니스 이메일에서는 부탁드리겠습니다와 같은 하십시오체를 사용해야 합니다. (국립국어원 표준 언어 예절)',
       label: 'AUTO',
+      confidence: 0.99,
+      applied_rules: ['FORMAL_REGISTER', 'STANDARD_SPEECH'],
       action: null,
     },
   ],
