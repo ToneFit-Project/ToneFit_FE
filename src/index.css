@@ -56,6 +56,8 @@
   --color-background-pressed-2: var(--color-background-pressed-2);
   --color-background-brand: var(--color-background-brand);
   --color-background-brand-subtle: var(--color-background-brand-subtle);
+  --color-background-brand-100: var(--color-background-brand-100);
+  --color-background-brand-400: var(--color-background-brand-400);
   /* Brand 인터랙션 토큰 (Color Roles에서 직접 참조) */
   --color-background-brand-hover: var(--color-background-brand-hover);
   --color-background-brand-pressed: var(--color-background-brand-pressed);
@@ -210,6 +212,111 @@ img {
   user-drag: none;
 }
 
+
+/**
+ * HeroSection 이메일 3D 오브젝트 부유 애니메이션
+ * Figma ref: node 3157-2064 (HeroFloatEmail3D)
+ *
+ * 4단계 좌표 기반 유기적 부유 동작:
+ *   Rest   → (0,    0)
+ *   Float1 → (+3, -14)  ← 최고점
+ *   Float2 → (-4,  +5)  ← 최저점
+ *   Float3 → (+2,  -7)  ← 중간
+ */
+@keyframes float-email {
+  0% {
+    transform: translate(0px, 0px);
+  }
+
+  25% {
+    transform: translate(3px, -14px);
+  }
+
+  50% {
+    transform: translate(-4px, 5px);
+  }
+
+  75% {
+    transform: translate(2px, -7px);
+  }
+
+  100% {
+    transform: translate(0px, 0px);
+  }
+}
+
+.animate-float-email {
+  animation: float-email 5s ease-in-out infinite;
+}
+
+/**
+ * HeroSection 글래스 카드 부유 애니메이션
+ *
+ * Left  (상황에 맞는 톤 추천) — Figma ref: node 3157-2133
+ *   Rest   → (0,   0)
+ *   Float1 → (-4, +19)  ← 최저점
+ *   Float2 → (+3,  -5)  ← 최고점
+ *   Float3 → (-2,  +2)  ← 중간
+ *
+ * Right (초안 생성까지 빠르게) — Figma ref: node 3157-2202
+ *   rotate(8.74deg) 포함 (inline style 대체)
+ *   Rest   → (0,    0)
+ *   Float1 → (+5, -10)  ← 최고점
+ *   Float2 → (-3,  +4)  ← 최저점
+ *   Float3 → (+2,  +8)  ← 중간
+ *   두 카드가 서로 다른 phase로 움직이도록 -2s delay 적용
+ */
+@keyframes float-glass-left {
+  0% {
+    transform: translate(0px, 0px);
+  }
+
+  25% {
+    transform: translate(-4px, 19px);
+  }
+
+  50% {
+    transform: translate(3px, -5px);
+  }
+
+  75% {
+    transform: translate(-2px, 2px);
+  }
+
+  100% {
+    transform: translate(0px, 0px);
+  }
+}
+
+@keyframes float-glass-right {
+  0% {
+    transform: translate(0px, 0px) rotate(8.74deg);
+  }
+
+  25% {
+    transform: translate(5px, -10px) rotate(8.74deg);
+  }
+
+  50% {
+    transform: translate(-3px, 4px) rotate(8.74deg);
+  }
+
+  75% {
+    transform: translate(2px, 8px) rotate(8.74deg);
+  }
+
+  100% {
+    transform: translate(0px, 0px) rotate(8.74deg);
+  }
+}
+
+.hero__glass--left {
+  animation: float-glass-left 5s ease-in-out infinite;
+}
+
+.hero__glass--right {
+  animation: float-glass-right 5s ease-in-out infinite -2s;
+}
 
 @keyframes slide-down {
   from {

@@ -1,13 +1,21 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChipV2, ButtonLongV2 } from '@/components/ui';
-import type { ReceiverType, PurposeType } from '@/types';
-import imgHeroEmail from '@/assets/visual.png';
+import { useState, useEffect, useRef, useId } from 'react';
+import type { ReactNode } from 'react';
+import { ButtonLongV2 } from '@/components/ui';
+import { ToneFitPanel } from '@/components/panel';
+import type {
+  PanelView,
+  GenerateParams,
+  GenerateResult,
+} from '@/components/panel';
+import { postGeneration } from '@/api';
+import { devLog, devError } from '@/utils/devLog';
+import imgHeroEmail from '@/assets/here_content.png';
 import imgLogo from '@/assets/logo.svg';
-import imgPanelIcon from '@/assets/mail-logo.svg';
 import imgToolbar from '@/assets/toolbar.svg';
 import iconClose from '@/assets/icon/icon-close.svg';
 import iconMaximize from '@/assets/icon/icon-maximize.svg';
 import iconMinimize from '@/assets/icon/icon-minimize.svg';
+import iconExclamation from '@/assets/icon/icon-exclamation.svg';
 
 import tAi from '@/assets/toolbar/t-ai.svg';
 import tDelete from '@/assets/toolbar/t-delete.svg';
@@ -22,11 +30,10 @@ import tLock from '@/assets/toolbar/t-lock.svg';
 import tMore from '@/assets/toolbar/t-more.svg';
 import tSchedule from '@/assets/toolbar/t-schedule.svg';
 import tTonefit from '@/assets/toolbar/t-tonefit.svg';
-import iconAiPencil from '@/assets/aiPencil.svg';
-import iconExclamation from '@/assets/icon/icon-exclamation.svg';
+
 const mailIcons = [iconMinimize, iconMaximize, iconClose];
+// tTonefit은 펄스 글로우 효과를 위해 별도 컴포넌트로 렌더링
 const actionBarIcons = [
-  tTonefit,
   tSchedule,
   tFont,
   tAi,
@@ -40,47 +47,12 @@ const actionBarIcons = [
   tMore,
 ];
 
-// ─── 도메인 데이터 ────────────────────────────────────────────────
-const RECEIVER_OPTIONS: { value: ReceiverType; label: string }[] = [
-  { value: 'DIRECT_SUPERVISOR', label: '상사' },
-  { value: 'OTHER_DEPT_COLLEAGUE', label: '동료' },
-  { value: 'CLIENT', label: '고객사' },
-  { value: 'EXTERNAL_PARTNER', label: '협력사' },
-];
-
-const PURPOSE_OPTIONS: { value: PurposeType; label: string }[] = [
-  { value: 'REPORT', label: '보고' },
-  { value: 'REQUEST', label: '요청' },
-  { value: 'NOTICE', label: '안내' },
-  { value: 'THANKS', label: '감사' },
-  { value: 'APOLOGY', label: '사과' },
-  { value: 'DECLINE', label: '거절' },
-];
-
-const EMAIL_MAX = 200;
+// ─── 데모 전용 상수 ───────────────────────────────────────────────
 const DEMO_DAILY_LIMIT = 3;
 
-/** 개발용: 목업 로딩 시간 (ms). 실제 API 연동 시 제거 */
-const DEV_MOCK_DELAY_MS = 3000;
-
-/**
- * 자음(ㄱ-ㅎ) · 모음(ㅏ-ㅣ) · 이모지 · HTML 태그 · 공백만으로 이루어진 경우 true
- * 완성된 한글 음절(가-힣), 영문, 숫자, 특수문자가 하나라도 있으면 false
- */
-const isOnlyJamoOrSpaces = (text: string): boolean => {
-  const withoutHtml = text.replace(/<[^>]*>/g, '');
-  const stripped = withoutHtml.replace(/\s/g, '');
-  if (!stripped) return true;
-  const withoutEmoji = stripped.replace(/\p{Extended_Pictographic}/gu, '');
-  if (!withoutEmoji) return true;
-  return [...withoutEmoji].every((char) => {
-    const code = char.charCodeAt(0);
-    return code >= 0x3131 && code <= 0x318e;
-  });
-};
+// ─── 데모 사용 횟수 (localStorage) ───────────────────────────────
 const DEMO_USAGE_KEY = 'tonefit_demo_usage';
 
-// ─── 데모 사용 횟수 (localStorage) ───────────────────────────────
 interface DemoUsage {
   count: number;
   date: string; // 'YYYY-MM-DD'
@@ -88,7 +60,6 @@ interface DemoUsage {
 
 const getTodayString = () => new Date().toISOString().slice(0, 10);
 
-/** 오늘 날짜 기준 남은 횟수를 읽어옴. 없거나 날짜가 바뀌면 DEMO_DAILY_LIMIT로 초기화 */
 const getDemoRemaining = (): number => {
   try {
     const raw = localStorage.getItem(DEMO_USAGE_KEY);
@@ -113,7 +84,6 @@ const getDemoRemaining = (): number => {
   }
 };
 
-/** 남은 횟수를 저장 */
 const saveDemoRemaining = (count: number) => {
   localStorage.setItem(
     DEMO_USAGE_KEY,
@@ -121,14 +91,41 @@ const saveDemoRemaining = (count: number) => {
   );
 };
 
-// 목업 이메일 데이터 (API 연동 전 임시)
-const MOCK_EMAIL = {
-  subject: '업무 협조 요청드립니다',
-  content:
-    '안녕하세요.\n\n다름이 아니라 금번 프로젝트 관련하여 협조를 요청드리고자 연락드립니다.\n\n세부 사항은 별도 자료를 첨부하오니 검토 후 회신 부탁드리겠습니다.\n\n바쁘신 중에도 검토해 주셔서 감사드립니다.\n\n좋은 하루 되세요.',
-};
-
 // ─── 서브 컴포넌트 ────────────────────────────────────────────────
+
+/**
+ * Gmail 툴바의 ToneFit 아이콘 — 배경 없음 ↔ brand-purple-200 breathing 효과
+ *
+ * Figma ref: node 3167-1984 (DemoCtaLogoButtonPulse)
+ * - Rest     : 배경 완전 투명 (opacity 0)
+ * - Highlight: brand-purple-200(≈#DFD1FF) 원형 배경 (크기 변화 없음)
+ * - 전환     : opacity 0 ↔ 1, 0.8s ease-in-out
+ */
+const ToneFitToolbarIcon = () => {
+  const [isHighlight, setIsHighlight] = useState(false);
+
+  useEffect(() => {
+    // 1.6s 마다 상태 전환 → 0.8s fade in + 0.8s hold → 0.8s fade out + 0.8s hold (3.2s 주기)
+    const t = setInterval(() => setIsHighlight((p) => !p), 1600);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <span className="relative flex items-center justify-center size-7 shrink-0">
+      {/* 배경 — Rest(투명) ↔ Highlight(brand-purple-200) */}
+      <span
+        className="absolute inset-0 rounded-full"
+        style={{
+          backgroundColor: '#DFD1FF',
+          opacity: isHighlight ? 1 : 0,
+          transition: 'opacity 0.7s ease-in-out',
+        }}
+      />
+      {/* ToneFit 아이콘 */}
+      <img src={tTonefit} alt="ToneFit" className="relative z-10 size-7" />
+    </span>
+  );
+};
 
 /** 네비게이션 헤더 */
 const DemoHeader = () => {
@@ -137,13 +134,8 @@ const DemoHeader = () => {
   useEffect(() => {
     const handleScroll = () => {
       if (!headerRef.current) return;
-      if (window.scrollY > 50) {
-        headerRef.current.classList.add('is-sticky');
-      } else {
-        headerRef.current.classList.remove('is-sticky');
-      }
+      headerRef.current.classList.toggle('is-sticky', window.scrollY > 50);
     };
-
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -154,7 +146,7 @@ const DemoHeader = () => {
       id="header"
       className="header w-full border-b border-border-default px-7 py-5 fixed z-9999"
     >
-      <div className="header__bg bg-background-page absolute left-0 top-0 w-full h-full z-[-1] opacity-20"></div>
+      <div className="header__bg bg-background-page absolute left-0 top-0 w-full h-full z-[-1] opacity-20" />
       <div className="header__inner flex items-center justify-between">
         {/* 로고 + 네비 */}
         <div className="header__left flex items-center gap-14">
@@ -183,11 +175,9 @@ const DemoHeader = () => {
 
         {/* 우측 버튼 그룹 */}
         <div className="header__right flex items-center gap-2.5 drop-shadow-sm">
-          {/* CTA */}
           <a
             href="https://chromewebstore.google.com/category/extensions"
             target="_blank"
-            type="button"
             className="flex items-center justify-center py-2.5 px-4 bg-background-brand rounded-lg text-sm font-semibold leading-5 tracking-tight text-text-inverse hover:bg-background-brand-hover transition-colors"
           >
             ToneFit 시작하기
@@ -198,10 +188,266 @@ const DemoHeader = () => {
   );
 };
 
+// ─── Liquid Glass 물리 굴절 유틸 ─────────────────────────────────────
+// 출처: archisvaze/liquid-glass (MIT)
+// backdrop-filter: url(#id) 로 배경을 직접 굴절시키는 기법
+
+/** Snell의 법칙 기반 굴절 프로파일 계산 */
+function lgCalcProfile(
+  thickness: number,
+  bezel: number,
+  heightFn: (x: number) => number,
+  ior: number,
+  samples = 128
+): Float64Array {
+  const eta = 1 / ior;
+  const refract = (nx: number, ny: number): [number, number] | null => {
+    const k = 1 - eta * eta * (1 - ny * ny);
+    if (k < 0) return null;
+    const sq = Math.sqrt(k);
+    return [-(eta * ny + sq) * nx, eta - (eta * ny + sq) * ny];
+  };
+  const profile = new Float64Array(samples);
+  for (let i = 0; i < samples; i++) {
+    const x = i / samples;
+    const y = heightFn(x);
+    const dx = x < 1 ? 1e-4 : -1e-4;
+    const deriv = (heightFn(x + dx) - y) / dx;
+    const mag = Math.sqrt(deriv * deriv + 1);
+    const ref = refract(-deriv / mag, -1 / mag);
+    profile[i] = ref ? ref[0] * ((y * bezel + thickness) / ref[1]) : 0;
+  }
+  return profile;
+}
+
+/** 굴절 변위 맵 → canvas data URL (모서리 bezel 영역만 변위 적용) */
+function lgDispMap(
+  w: number,
+  h: number,
+  r: number,
+  bezel: number,
+  profile: Float64Array,
+  maxDisp: number
+): string {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = 128;
+    d[i + 1] = 128;
+    d[i + 2] = 0;
+    d[i + 3] = 255;
+  }
+  const rSq = r * r,
+    r1Sq = (r + 1) ** 2,
+    rBSq = Math.max(r - bezel, 0) ** 2;
+  const wB = w - r * 2,
+    hB = h - r * 2,
+    S = profile.length;
+  for (let y1 = 0; y1 < h; y1++) {
+    for (let x1 = 0; x1 < w; x1++) {
+      const x = x1 < r ? x1 - r : x1 >= w - r ? x1 - r - wB : 0;
+      const y = y1 < r ? y1 - r : y1 >= h - r ? y1 - r - hB : 0;
+      const dSq = x * x + y * y;
+      if (dSq > r1Sq || dSq < rBSq) continue;
+      const dist = Math.sqrt(dSq);
+      const fromSide = r - dist;
+      const op =
+        dSq < rSq
+          ? 1
+          : 1 - (dist - Math.sqrt(rSq)) / (Math.sqrt(r1Sq) - Math.sqrt(rSq));
+      if (op <= 0 || dist === 0) continue;
+      const cos = x / dist,
+        sin = y / dist;
+      const bi = Math.min(((fromSide / bezel) * S) | 0, S - 1);
+      const disp = profile[bi] || 0;
+      const idx = (y1 * w + x1) * 4;
+      d[idx] = (128 + ((-cos * disp) / maxDisp) * 127 * op + 0.5) | 0;
+      d[idx + 1] = (128 + ((-sin * disp) / maxDisp) * 127 * op + 0.5) | 0;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c.toDataURL();
+}
+
+/** 스펙큘러 하이라이트 맵 → canvas data URL */
+function lgSpecMap(
+  w: number,
+  h: number,
+  r: number,
+  bezel: number,
+  angle = Math.PI / 3
+): string {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(w, h);
+  const d = img.data;
+  d.fill(0);
+  const rSq = r * r,
+    r1Sq = (r + 1) ** 2,
+    rBSq = Math.max(r - bezel, 0) ** 2;
+  const wB = w - r * 2,
+    hB = h - r * 2;
+  const sv = [Math.cos(angle), Math.sin(angle)];
+  for (let y1 = 0; y1 < h; y1++) {
+    for (let x1 = 0; x1 < w; x1++) {
+      const x = x1 < r ? x1 - r : x1 >= w - r ? x1 - r - wB : 0;
+      const y = y1 < r ? y1 - r : y1 >= h - r ? y1 - r - hB : 0;
+      const dSq = x * x + y * y;
+      if (dSq > r1Sq || dSq < rBSq) continue;
+      const dist = Math.sqrt(dSq);
+      const fromSide = r - dist;
+      const op =
+        dSq < rSq
+          ? 1
+          : 1 - (dist - Math.sqrt(rSq)) / (Math.sqrt(r1Sq) - Math.sqrt(rSq));
+      if (op <= 0 || dist === 0) continue;
+      const dot = Math.abs((x / dist) * sv[0] + (-y / dist) * sv[1]);
+      const edge = Math.sqrt(Math.max(0, 1 - (1 - fromSide) ** 2));
+      const coeff = dot * edge;
+      const col = (255 * coeff) | 0;
+      const idx = (y1 * w + x1) * 4;
+      d[idx] = col;
+      d[idx + 1] = col;
+      d[idx + 2] = col;
+      d[idx + 3] = (col * coeff * op) | 0;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c.toDataURL();
+}
+
+/**
+ * LiquidGlassPill
+ *
+ * archisvaze/liquid-glass 기법을 React로 구현한 물리 기반 유리 pill.
+ *
+ * 구조:
+ *   ① backdrop-filter: url(#id) → 배경 자체를 SVG 필터로 굴절
+ *   ② 틴트 + 인너 섀도우 오버레이 → 유리 두께감 표현
+ *   ③ 텍스트 콘텐츠
+ *
+ * 굴절은 둥근 모서리(bezel) 영역에만 적용 → 중앙은 선명하게 유지
+ * ⚠ backdrop-filter: url(#...) 는 Chrome/Chromium 전용
+ */
+const LiquidGlassPill = ({ children }: { children: ReactNode }) => {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<SVGFilterElement>(null);
+  const reactId = useId();
+  // useId는 렌더마다 동일값 → ref 불필요, 일반 상수로 사용
+  const filterId = `lg-pill-${reactId.replace(/:/g, '')}`;
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    const fEl = filterRef.current;
+    if (!el || !fEl) return;
+
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    if (w < 2 || h < 2) return;
+
+    const r = Math.round(Math.min(w, h) / 2); // fully rounded pill
+    const bezel = Math.min(14, r - 1);
+
+    // convex squircle surface — 가장 자연스러운 유리 형태
+    const surfaceFn = (x: number) => Math.pow(1 - Math.pow(1 - x, 4), 0.25);
+
+    const profile = lgCalcProfile(80, bezel, surfaceFn, 2.5);
+    const maxDisp = Math.max(...Array.from(profile).map(Math.abs)) || 1;
+    const dispUrl = lgDispMap(w, h, r, bezel, profile, maxDisp);
+    const specUrl = lgSpecMap(w, h, r, bezel * 2.5);
+
+    fEl.innerHTML = `
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.3" result="b"/>
+      <feImage href="${dispUrl}" x="0" y="0" width="${w}" height="${h}" result="dm"/>
+      <feDisplacementMap in="b" in2="dm" scale="${maxDisp}"
+        xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feColorMatrix in="d" type="saturate" values="4" result="ds"/>
+      <feImage href="${specUrl}" x="0" y="0" width="${w}" height="${h}" result="sp"/>
+      <feComposite in="ds" in2="sp" operator="in" result="sm"/>
+      <feComponentTransfer in="sp" result="sf">
+        <feFuncA type="linear" slope="0.5"/>
+      </feComponentTransfer>
+      <feBlend in="sm" in2="d" mode="normal" result="ws"/>
+      <feBlend in="sf" in2="ws" mode="normal"/>
+    `;
+  }, []);
+
+  const fid = filterId;
+
+  return (
+    <>
+      {/* SVG filter 정의 */}
+      <svg
+        aria-hidden="true"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{
+          position: 'absolute',
+          width: 0,
+          height: 0,
+          overflow: 'hidden',
+        }}
+        colorInterpolationFilters="sRGB"
+      >
+        <defs>
+          <filter
+            ref={filterRef}
+            id={fid}
+            x="0%"
+            y="0%"
+            width="100%"
+            height="100%"
+          />
+        </defs>
+      </svg>
+
+      {/* pill 본체 */}
+      <div
+        ref={wrapRef}
+        className="relative px-6 py-2.5 rounded-full"
+        style={{
+          isolation: 'isolate',
+          // boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+        }}
+      >
+        {/* ① 배경 굴절 (backdrop-filter → SVG 필터) */}
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{
+            backdropFilter: `url(#${fid})`,
+            WebkitBackdropFilter: `url(#${fid})`,
+            zIndex: -1,
+          }}
+        />
+        {/* ② 틴트 + 인너 섀도우 */}
+        <div
+          className="absolute inset-0 rounded-full pointer-events-none"
+          style={{
+            backgroundColor: 'rgba(255,255,255,0.06)',
+            boxShadow: 'inset 0 0 20px -5px rgba(255,255,255,0.45)',
+            border: '1px solid rgba(255,255,255,0.22)',
+          }}
+        />
+        {/* ③ 텍스트 */}
+        <div className="relative" style={{ zIndex: 1 }}>
+          {children}
+        </div>
+      </div>
+    </>
+  );
+};
+
 /** 히어로 섹션 */
-const HeroSection = () => (
-  <section id="heroSection" className="hero relative w-full overflow-hidden">
-    {/* 좌측: 헤드카피 + CTA */}
+const HeroSection = ({ onStartDemo }: { onStartDemo: () => void }) => (
+  <section
+    id="heroSection"
+    className="hero relative w-full overflow-hidden flex justify-center"
+  >
     <div className="hero__text absolute w-11/12 mx-auto left-0 right-0 top-1/4 flex flex-col gap-16 z-10">
       <div className="flex flex-col gap-7">
         <h1 className="text-4xl-plus font-bold leading-[48px] tracking-[-0.8px] text-text-primary whitespace-pre-line">
@@ -212,58 +458,87 @@ const HeroSection = () => (
         </p>
       </div>
       <div className="w-[264px] drop-shadow-sm">
-        <ButtonLongV2>내 첫 메일 써보기</ButtonLongV2>
+        <ButtonLongV2 onClick={onStartDemo}>내 첫 메일 써보기</ButtonLongV2>
       </div>
     </div>
-
-    {/* 우측: 3D 이메일 일러스트 */}
-    <div className="here__img flex items-center justify-center ">
-      <div className="relative text-2xl font-bold leading-8 tracking-[-0.48px] text-text-inverse">
-        {/* 왼쪽 플로팅 카드 */}
-        <div className="absolute left-1/7 top-[55%] z-10">
-          <div className="bg-white/10 backdrop-blur-sm px-6 py-2.5 rounded-full border border-white">
-            <span className="">상황에 맞는 톤 추천</span>
-          </div>
+    <div className="here__img h-screen w-full relative flex items-center justify-center ">
+      <div className="relative text-2xl font-bold leading-8 tracking-[-0.48px] text-text-inverse max-w-265 w-full border border-white rounded-full aspect-square flex items-center justify-center">
+        <div className="hero__glass hero__glass--left absolute left-1/7 top-[55%] z-10">
+          <LiquidGlassPill>상황에 맞는 톤 추천</LiquidGlassPill>
         </div>
-        {/* 3D 이메일 이미지 */}
-        <span>
+        <div className="">
           <img
             src={imgHeroEmail}
             alt="ToneFit 이메일 생성 일러스트"
-            className="relative z-0"
+            className="relative z-0 animate-float-email"
           />
-        </span>
-        {/* 오른쪽 플로팅 카드 (살짝 회전) */}
-        <div
-          className="absolute right-[23%] top-[28%] z-10"
-          style={{ transform: 'rotate(8.74deg)' }}
-        >
-          <div className="bg-white/10 backdrop-blur-sm px-6 py-2.5 rounded-full border border-white">
-            <span>초안 생성까지 빠르게</span>
-          </div>
+        </div>
+        <div className="hero__glass hero__glass--right absolute right-[23%] top-[28%] z-10">
+          <LiquidGlassPill>초안 생성까지 빠르게</LiquidGlassPill>
         </div>
       </div>
     </div>
   </section>
 );
 
-/** 메일 섹션 컴포넌트 */
+// ─── Gmail 목업 ───────────────────────────────────────────────────
+
 interface GmailMockupProps {
   subject?: string;
   content?: string;
   onSubjectChange?: (value: string) => void;
   onContentChange?: (value: string) => void;
+  /** 이메일 생성 중 — 본문 영역에 스켈레톤 타이핑 애니메이션 표시 */
+  isLoading?: boolean;
 }
 
-/** Gmail 작성 창 목업 */
+/**
+ * 스켈레톤 줄 정의 (Figma node 3183-1984 기반)
+ * widthPct: 줄 너비 비율 / label: Figma 상태명
+ */
+const SKELETON_LINES: { widthPct: number; label: string }[] = [
+  { widthPct: 100, label: 'Line 1' }, // 870px → 100%
+  { widthPct: 60, label: 'Line 2' }, // 518px → 518/870 ≈ 60%
+  { widthPct: 67, label: 'Line 3' }, // 581px → 581/870 ≈ 67%
+];
+
 const GmailMockup = ({
   subject = '',
   content = '',
   onSubjectChange,
   onContentChange,
+  isLoading = false,
 }: GmailMockupProps) => {
-  // 생성 완료 후 편집 가능 상태
-  const isEditable = subject !== '' || content !== '';
+  const isEditable = !isLoading && (subject !== '' || content !== '');
+
+  /**
+   * "Gmail에서 바로 작업하기" 버튼 glow 애니메이션
+   * Figma node 3194-2068: Rest(#7c4dff) ↔ Glow(#9b78ff) breathing 효과
+   * 1.3s 주기로 상태 전환, 0.7s ease-in-out 배경색 전환
+   */
+  const [isGlowing, setIsGlowing] = useState(false);
+  useEffect(() => {
+    const t = setInterval(() => setIsGlowing((p) => !p), 1300);
+    return () => clearInterval(t);
+  }, []);
+
+  /**
+   * 스켈레톤 타이핑 애니메이션 — 생성 중일 때만 실행
+   * Figma node 3183-1984: Line 1 → Line 2 → Line 3 → Line 1 (600ms 주기)
+   * 활성 줄: opacity 1 / 비활성 줄: opacity 0.08
+   */
+  const [skeletonStep, setSkeletonStep] = useState(0);
+  useEffect(() => {
+    if (!isLoading) return;
+    const t = setInterval(
+      () => setSkeletonStep((p) => (p + 1) % SKELETON_LINES.length),
+      600
+    );
+    return () => {
+      clearInterval(t);
+      setSkeletonStep(0); // 로딩 종료 시 리셋
+    };
+  }, [isLoading]);
 
   return (
     <div className="bg-background-surface shadow-[0px_4px_8px_rgba(0,0,0,0.1)] flex flex-col flex-1 gap-2.5 overflow-hidden rounded-tl-xl rounded-tr-xl">
@@ -287,7 +562,6 @@ const GmailMockup = ({
 
       {/* 발신/제목 필드 */}
       <div className="flex flex-col gap-4 px-5 py-2.5 shrink-0">
-        {/* 수신자 (항상 고정) */}
         <span className="w-full block pb-3.5 border-b border-border-default">
           <input
             name="mailTo"
@@ -296,7 +570,6 @@ const GmailMockup = ({
             disabled
           />
         </span>
-        {/* 제목 (생성 후 편집 가능) */}
         <span className="w-full block pb-3.5 border-b border-border-default">
           <input
             name="mailSubject"
@@ -311,24 +584,40 @@ const GmailMockup = ({
         </span>
       </div>
 
-      {/* 본문 필드 (생성 후 편집 가능) */}
+      {/* 본문 */}
       <div className="flex-1 px-5 min-h-95">
-        <textarea
-          className={`w-full h-full text-lg font-normal leading-7 tracking-tight text-text-secondary placeholder:text-text-placeholder focus:outline-none focus:ring-0 resize-none ${isEditable ? 'cursor-text' : 'cursor-default'}`}
-          name="mailContent"
-          placeholder="어떤 이메일을 작성하시겠어요?"
-          value={content}
-          readOnly={!isEditable}
-          onChange={
-            isEditable ? (e) => onContentChange?.(e.target.value) : undefined
-          }
-        />
+        {isLoading ? (
+          /* 스켈레톤 타이핑 애니메이션 (Figma node 3183-1984) */
+          <div className="flex flex-col gap-2.5 pt-2">
+            {SKELETON_LINES.map((line, i) => (
+              <div
+                key={line.label}
+                className="h-7 rounded-sm bg-background-muted"
+                style={{
+                  width: `${line.widthPct}%`,
+                  opacity: i === skeletonStep ? 1 : 0.08,
+                  transition: 'opacity 0.3s ease-in-out',
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <textarea
+            className={`w-full h-full text-lg font-normal leading-7 tracking-tight text-text-secondary placeholder:text-text-placeholder focus:outline-none focus:ring-0 resize-none ${isEditable ? 'cursor-text' : 'cursor-default'}`}
+            name="mailContent"
+            placeholder="어떤 이메일을 작성하시겠어요?"
+            value={content}
+            readOnly={!isEditable}
+            onChange={
+              isEditable ? (e) => onContentChange?.(e.target.value) : undefined
+            }
+          />
+        )}
       </div>
 
       {/* 서식 툴바 */}
       <div className="shrink-0 flex items-center px-4.5 py-1.5">
         <div className="hidden bg-background-brand-subtle items-center gap-1.5 h-[46px] px-3.5 rounded-[23px] w-[94%] overflow-hidden">
-          {/* 실행취소/다시실행 */}
           <div className="flex gap-0.5">
             {['↩', '↪'].map((c) => (
               <button
@@ -341,16 +630,13 @@ const GmailMockup = ({
             ))}
           </div>
           <div className="h-6 w-px bg-icon-disabled" />
-          {/* 폰트 패밀리 */}
           <span className="text-sm font-semibold text-text-disabled tracking-tight px-1">
             Sans Serif ▾
           </span>
           <div className="h-6 w-px bg-icon-disabled" />
-          {/* 크기 */}
           <span className="text-sm font-semibold text-text-disabled tracking-tight px-1">
             T▾
           </span>
-          {/* 서식 버튼들 */}
           {['B', 'I', 'U', 'A'].map((f) => (
             <button
               key={f}
@@ -378,23 +664,34 @@ const GmailMockup = ({
 
       {/* 하단 액션 바 */}
       <div className="shrink-0 flex items-center gap-2.5 py-3.75 px-4">
-        <div className="bg-background-brand flex items-center rounded-full h-9 overflow-hidden shrink-0">
-          <div className="flex items-center justify-center px-3 py-2 ">
+        {/* Gmail 바로 작업하기 — Rest ↔ Glow breathing 애니메이션 */}
+        <a
+          className="flex items-center rounded-full h-9 bg-background-brand hover:bg-background-brand-hover! overflow-hidden shrink-0 cursor-pointer"
+          href="#none"
+          style={{
+            backgroundColor: isGlowing
+              ? 'var(--color-background-brand-400)'
+              : '',
+            transition: 'background-color 0.7s ease-in-out',
+          }}
+        >
+          <div className="flex items-center justify-center px-3 py-2">
             <span className="text-sm leading-5 font-semibold text-text-inverse tracking-tight">
               Gmail에서 바로 작업하기
             </span>
           </div>
-          <div className="h-9 w-px bg-background-brand-subtle"></div>
-          <button
-            type="button"
+          <div className="h-9 w-px bg-background-brand-subtle" />
+          <span
+            // type="button"
             className="flex items-center justify-center h-9 w-8 text-text-inverse text-xs"
           >
             ▾
-          </button>
-        </div>
-        {/* 아이콘 버튼들 플레이스홀더 */}
+          </span>
+        </a>
         <div className="flex flex-1 justify-between items-center">
           <div className="flex items-center gap-2.5">
+            {/* ToneFit 아이콘 — 펄스 글로우 효과 */}
+            <ToneFitToolbarIcon />
             {actionBarIcons.map((icon) => (
               <span
                 key={icon}
@@ -415,422 +712,119 @@ const GmailMockup = ({
   );
 };
 
-/** 로딩 단계별 h6 메시지 */
-const getLoadingMessage = (
-  elapsed: number,
-  receiverLabel: string,
-  purposeLabel: string
-): string => {
-  if (elapsed < 5) return `${receiverLabel}에게 맞는 표현을 찾고 있어요.`;
-  if (elapsed < 10) return `${purposeLabel}에 맞는 초안을 준비하고 있어요.`;
-  return '초안을 완성하고 있어요. 잠깐만요.';
-};
+// ─── 횟수 소진 팝업 ───────────────────────────────────────────────
 
-interface PanelLoadingBodyProps {
-  receiverLabel: string;
-  purposeLabel: string;
-}
-
-/** 이메일 생성 중 로딩 본문 */
-const PanelLoadingBody = ({
-  receiverLabel,
-  purposeLabel,
-}: PanelLoadingBodyProps) => {
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setElapsed((prev) => prev + 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-8 px-4 py-5">
-      {/* 스피너 */}
-      <div className="relative size-40 flex items-center justify-center shrink-0">
-        {/* 배경 원 */}
-        <svg
-          className="absolute inset-0"
-          width="160"
-          height="160"
-          viewBox="0 0 160 160"
-          fill="none"
-        >
-          <circle
-            cx="80"
-            cy="80"
-            r="72"
-            stroke="var(--color-border-default)"
-            strokeWidth="8"
-          />
-        </svg>
-        {/* 회전하는 호 */}
-        <svg
-          className="absolute inset-0 animate-spin"
-          style={{ animationDuration: '1.4s' }}
-          width="160"
-          height="160"
-          viewBox="0 0 160 160"
-          fill="none"
-        >
-          <circle
-            cx="80"
-            cy="80"
-            r="72"
-            stroke="var(--color-icon-brand)"
-            strokeWidth="8"
-            strokeLinecap="round"
-            strokeDasharray="340 113"
-            strokeDashoffset="113"
-          />
-        </svg>
-        {/* 가운데: AI 펜슬 + 점 3개 */}
-        <div className="flex flex-col items-center gap-2 z-10">
-          <img src={iconAiPencil} alt="" className="size-12" />
-          <div className="flex gap-3">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="size-2 rounded-full bg-background-brand animate-pulse"
-                style={{ animationDelay: `${i * 0.2}s` }}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 텍스트 */}
-      <div className="flex flex-col gap-2 items-center text-center w-80">
-        <h6 className="text-xl font-medium leading-7 tracking-tight text-text-primary">
-          {getLoadingMessage(elapsed, receiverLabel, purposeLabel)}
-        </h6>
-        <p className="text-sm font-normal leading-5.5 tracking-tight text-text-tertiary">
-          입력하신 내용을 바탕으로
-          <br />
-          자연스러운 톤의 이메일을 만드는 중입니다.
-        </p>
-      </div>
-    </div>
-  );
-};
-
-/** 생성 성공 화면 */
-const PanelSuccessBody = ({ onReset }: { onReset: () => void }) => (
-  <div className="flex-1 flex flex-col items-center justify-between px-4 py-5">
-    {/* 콘텐츠 */}
-    <div className="flex-1 flex flex-col items-center justify-center py-12">
-      <div className="flex flex-col gap-5 items-center">
-        {/* 성공 아이콘: 60px 보라색 원 + 흰 체크 */}
-        <div className="size-15 rounded-full bg-action-primary-default flex items-center justify-center shrink-0">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+/** 무료 체험 횟수를 모두 소진했을 때 표시되는 모달 팝업 */
+const ExhaustedPopup = ({ onClose }: { onClose: () => void }) => (
+  <div
+    className="fixed inset-0 z-9999 flex items-center justify-center bg-[rgba(0,0,0,0.54)]"
+    onClick={(e) => {
+      if (e.target === e.currentTarget) onClose();
+    }}
+  >
+    <div className="relative bg-background-surface rounded-2xl pt-6 pb-2.5 px-5 w-[552px] gap-8 flex flex-col items-center">
+      {/* 닫기 버튼 */}
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="팝업 닫기"
+        className="absolute top-4 right-4 cursor-pointer size-8 rounded-2xl bg-[rgba(255,255,255,0.86)] border border-border-default flex items-center justify-center hover:bg-background-subtle transition-colors"
+      >
+        <span>
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              x="0.5"
+              y="0.5"
+              width="31"
+              height="31"
+              rx="15.5"
+              fill="white"
+              fill-opacity="0.86"
+            />
+            <rect
+              x="0.5"
+              y="0.5"
+              width="31"
+              height="31"
+              rx="15.5"
+              stroke="#E5E7EF"
+            />
             <path
-              d="M5.25 14L11.375 20.125L22.75 7.875"
-              stroke="white"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              d="M11.3346 21.8333L10.168 20.6666L14.8346 16L10.168 11.3333L11.3346 10.1666L16.0013 14.8333L20.668 10.1666L21.8346 11.3333L17.168 16L21.8346 20.6666L20.668 21.8333L16.0013 17.1666L11.3346 21.8333Z"
+              fill="#6B7284"
             />
           </svg>
-        </div>
-        {/* 텍스트 */}
-        <div className="flex flex-col gap-3.5 items-center text-center">
-          <p className="text-xl-plus font-semibold leading-7.5 tracking-tight text-text-primary">
-            쓰는 법을 몰라도 된다는 게,
-            <br />
-            이제 느껴지셨나요?
-          </p>
-          <p className="text-base font-normal leading-6 tracking-tight text-text-secondary text-center">
-            간단히 설치하고, 매번 이렇게 완성해보세요.
-          </p>
-        </div>
-      </div>
-    </div>
-    {/* CTA */}
-    <div className="w-full shrink-0">
-      <ButtonLongV2 onClick={onReset}>새 이메일 작성하기</ButtonLongV2>
-    </div>
-  </div>
-);
+        </span>
+      </button>
 
-/** 생성 실패 화면 */
-const PanelErrorBody = ({ onRetry }: { onRetry: () => void }) => (
-  <div className="flex-1 flex flex-col items-center justify-between px-4 py-5">
-    {/* 콘텐츠 */}
-    <div className="flex-1 flex flex-col items-center justify-center gap-10 py-12">
-      {/* 에러 아이콘: 90px 보라색-서브틀 원 + 느낌표 */}
-      <div className="size-22.5 rounded-full bg-background-brand-subtle flex items-center justify-center shrink-0">
+      {/* 아이콘 */}
+      <div className="size-[90px] rounded-full bg-background-brand-subtle flex items-center justify-center shrink-0">
         <img src={iconExclamation} alt="" className="w-3.25 h-12.5" />
       </div>
+
       {/* 텍스트 */}
-      <div className="flex flex-col gap-5 items-center text-center w-full">
-        <p className="text-xl-plus font-semibold leading-7.5 tracking-tight text-text-primary">
-          교정을 완료하지 못했어요
+      <div className="flex flex-col items-center gap-3 text-center">
+        <p className="font-bold text-[15px] leading-[22px] tracking-tight text-text-brand">
+          체험 횟수 소진
         </p>
-        <p className="text-base font-normal leading-6 tracking-tight text-text-primary text-center">
-          잠시 후 다시 시도해 주세요.
-          <br />
-          입력하신 내용은 그대로 유지돼요.
+        <h2 className="text-[26px] font-bold leading-[34px] tracking-tight text-text-primary">
+          무료 체험을 모두 사용했어요
+        </h2>
+        <p className="text-base font-normal leading-6 tracking-tight text-text-secondary">
+          설치 후 Gmail에서 바로 이어서 이메일을 만들 수 있어요.
         </p>
       </div>
-    </div>
-    {/* CTA */}
-    <div className="w-full shrink-0">
-      <ButtonLongV2 onClick={onRetry}>다시하기</ButtonLongV2>
-    </div>
-  </div>
-);
 
-/** 입력 폼 패널 본문 */
-interface PanelBodyProps {
-  receiver: ReceiverType | null;
-  setReceiver: (v: ReceiverType | null) => void;
-  purpose: PurposeType | null;
-  setPurpose: (v: PurposeType | null) => void;
-  emailText: string;
-  setEmailText: (v: string) => void;
-  canGenerate: boolean;
-  onGenerate: () => void;
-}
-
-const PanelBody = ({
-  receiver,
-  setReceiver,
-  purpose,
-  setPurpose,
-  emailText,
-  setEmailText,
-  canGenerate,
-  onGenerate,
-}: PanelBodyProps) => {
-  const labelClass =
-    'text-base font-semibold leading-6 tracking-tight text-text-primary';
-
-  return (
-    <div className="flex-1 flex flex-col px-4 py-5 gap-5">
-      <div className="flex flex-col gap-8">
-        {/* 수신자 유형 */}
-        <div className="flex flex-col gap-4">
-          <p className={labelClass}>수신자 유형 선택</p>
-          <div className="grid grid-cols-4 gap-1">
-            {RECEIVER_OPTIONS.map(({ value, label }) => (
-              <ChipV2
-                key={value}
-                selected={receiver === value}
-                onClick={() => setReceiver(receiver === value ? null : value)}
-              >
-                {label}
-              </ChipV2>
-            ))}
-          </div>
-        </div>
-
-        {/* 목적 */}
-        <div className="flex flex-col gap-4">
-          <p className={labelClass}>목적 선택</p>
-          <div className="grid grid-cols-4 gap-2">
-            {PURPOSE_OPTIONS.map(({ value, label }) => (
-              <ChipV2
-                key={value}
-                selected={purpose === value}
-                onClick={() => setPurpose(purpose === value ? null : value)}
-              >
-                {label}
-              </ChipV2>
-            ))}
-          </div>
-        </div>
-
-        {/* 이메일 내용 입력 */}
-        <div className="flex flex-col gap-4 flex-1">
-          <p className={labelClass}>이메일 내용 입력</p>
-          <div className="flex flex-col gap-1 flex-1">
-            <div className="relative bg-background-surface border border-border-default rounded-xl p-2.5 flex-1 min-h-[218px]">
-              <textarea
-                className="w-full h-full resize-none text-sm font-normal leading-5.5 tracking-tight text-text-secondary placeholder:text-text-placeholder bg-transparent outline-none"
-                placeholder="어떤 이메일을 작성하고 싶으신가요?"
-                value={emailText}
-                onChange={(e) => setEmailText(e.target.value)}
-                rows={5}
-              />
-              {/* 스크롤바 장식 */}
-              <div className="absolute right-1 top-2.5 w-1 h-8 bg-background-muted rounded-full" />
-            </div>
-            <div className="flex justify-end">
-              <span
-                className={`text-xs font-normal leading-4.5 tracking-tight ${
-                  emailText.length > EMAIL_MAX
-                    ? 'text-text-danger'
-                    : 'text-text-placeholder'
-                }`}
-              >
-                {emailText.length} / {EMAIL_MAX}자
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* CTA 버튼 */}
-      <div className="shrink-0">
-        <ButtonLongV2 disabled={!canGenerate} onClick={onGenerate}>
-          이메일 생성하기
+      {/* CTA */}
+      <div className="w-full p-2.5 mt-3.5">
+        <ButtonLongV2
+          onClick={() =>
+            window.open(
+              'https://chromewebstore.google.com/category/extensions',
+              '_blank',
+              'noopener,noreferrer'
+            )
+          }
+        >
+          ToneFit 시작하기
         </ButtonLongV2>
       </div>
     </div>
-  );
-};
+  </div>
+);
 
-type PanelView = 'input' | 'loading' | 'success' | 'error';
+// ─── [DEV ONLY] 패널 뷰 강제 전환 툴바 ──────────────────────────
 
-/** ToneFit 확장 패널 (인터랙티브) */
-interface ToneFitPanelProps {
-  onGenerate: (subject: string, content: string) => void;
-  onReset: () => void;
-  /** [DEV ONLY] 패널 뷰를 강제로 지정. undefined면 내부 상태 사용 */
-  devForceView?: PanelView;
-}
-
-const ToneFitPanel = ({
-  onGenerate,
-  onReset,
-  devForceView,
-}: ToneFitPanelProps) => {
-  const [receiver, setReceiver] = useState<ReceiverType | null>(null);
-  const [purpose, setPurpose] = useState<PurposeType | null>(null);
-  const [emailText, setEmailText] = useState('');
-  const [view, setView] = useState<PanelView>('input');
-  const [remainingCount, setRemainingCount] = useState<number>(() =>
-    getDemoRemaining()
-  );
-
-  const canGenerate =
-    !!receiver &&
-    !!purpose &&
-    emailText.trim().length >= 10 &&
-    emailText.length <= EMAIL_MAX &&
-    !isOnlyJamoOrSpaces(emailText) &&
-    remainingCount > 0;
-
-  const handleGenerate = useCallback(() => {
-    if (!canGenerate) return;
-    const newCount = remainingCount - 1;
-    setRemainingCount(newCount);
-    saveDemoRemaining(newCount);
-    setView('loading');
-    // TODO: API 연동 예정, 현재는 목업 데이터로 대체
-    setTimeout(() => {
-      // API 실패 시: setView('error');
-      setView('success');
-      onGenerate(MOCK_EMAIL.subject, MOCK_EMAIL.content);
-    }, DEV_MOCK_DELAY_MS);
-  }, [canGenerate, remainingCount, onGenerate]);
-
-  /** 성공 화면 → 입력 초기화 */
-  const handleReset = () => {
-    setView('input');
-    setReceiver(null);
-    setPurpose(null);
-    setEmailText('');
-    onReset();
-  };
-
-  /** 실패 화면 → 입력 유지하고 돌아가기 */
-  const handleRetry = () => {
-    setView('input');
-  };
-
-  useEffect(() => {
-    const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter') return;
-      if (isMac ? e.metaKey : e.altKey) {
-        e.preventDefault();
-        handleGenerate();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleGenerate]);
-
-  return (
-    <div className="bg-background-surface rounded-xl shadow-[0px_2px_4px_rgba(0,0,0,0.08)] flex flex-col w-[437px] shrink-0">
-      {/* 패널 헤더 */}
-      <div className="flex items-center justify-between px-4 py-5 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <img
-            src={imgPanelIcon}
-            alt="ToneFit"
-            className="size-8 object-contain"
-          />
-          <span className="text-lg font-semibold leading-[26px] tracking-tight text-text-primary">
-            이메일 생성
-          </span>
-        </div>
-        <button
-          type="button"
-          className="w-27 h-7 bg-background-selected border border-border-brand rounded-full text-xs font-semibold leading-4 tracking-tight text-text-brand"
-        >
-          {remainingCount}회 무료체험 가능
-        </button>
-      </div>
-      {/* 본문 */}
-      {(() => {
-        const activeView = devForceView ?? view;
-        if (activeView === 'loading')
-          return (
-            <PanelLoadingBody
-              receiverLabel={
-                RECEIVER_OPTIONS.find((o) => o.value === receiver)?.label ??
-                '상사'
-              }
-              purposeLabel={
-                PURPOSE_OPTIONS.find((o) => o.value === purpose)?.label ??
-                '보고'
-              }
-            />
-          );
-        if (activeView === 'success')
-          return <PanelSuccessBody onReset={handleReset} />;
-        if (activeView === 'error')
-          return <PanelErrorBody onRetry={handleRetry} />;
-        return null;
-      })()}
-      {(devForceView ?? view) === 'input' && (
-        <PanelBody
-          receiver={receiver}
-          setReceiver={setReceiver}
-          purpose={purpose}
-          setPurpose={setPurpose}
-          emailText={emailText}
-          setEmailText={setEmailText}
-          canGenerate={canGenerate}
-          onGenerate={handleGenerate}
-        />
-      )}
-    </div>
-  );
-};
-
-/** [DEV ONLY] 패널 뷰 강제 전환 플로팅 툴바 */
 const DEV_VIEW_OPTIONS: { view: PanelView; label: string }[] = [
-  { view: 'input', label: '입력 화면' },
+  { view: 'input', label: '작성 화면' },
   { view: 'loading', label: '로딩 화면' },
-  { view: 'success', label: '성공 화면' },
-  { view: 'error', label: '실패 화면' },
+  { view: 'success', label: '생성 완료' },
+  { view: 'error', label: '다시 시도' },
 ];
 
 const DevViewToolbar = ({
   current,
   onChange,
+  onResetUsage,
+  onDrainUsage,
+  onShowExhaustedPopup,
 }: {
   current: PanelView | undefined;
   onChange: (v: PanelView | undefined) => void;
+  onResetUsage: () => void;
+  onDrainUsage: () => void;
+  onShowExhaustedPopup: () => void;
 }) => (
-  <div className="fixed bottom-6 right-6 z-9999 flex flex-col gap-1.5 bg-background-surface border border-border-default rounded-xl shadow-lg p-3 w-36">
+  <div className="fixed bottom-30 right-6 z-9999 flex flex-col gap-1.5 bg-background-surface border border-border-default rounded-xl shadow-lg p-3 w-36">
     <div className="flex items-center justify-between mb-0.5">
       <p className="text-2xs font-bold tracking-wide text-text-tertiary uppercase">
-        🛠 DEV 뷰
+        🛠 미리보기
       </p>
       {current !== undefined && (
         <button
@@ -844,7 +838,7 @@ const DevViewToolbar = ({
     </div>
     {current !== undefined && (
       <p className="text-2xs text-text-warning leading-3.5 mb-0.5">
-        실제 흐름 일시정지
+        실제 흐름 일시정지됨!!!
       </p>
     )}
     {DEV_VIEW_OPTIONS.map(({ view, label }) => (
@@ -861,29 +855,119 @@ const DevViewToolbar = ({
         {label}
       </button>
     ))}
+    {/* 구분선 */}
+    <div className="border-t border-border-subtle my-0.5" />
+    {/* 횟수 제어 */}
+    <button
+      type="button"
+      onClick={onResetUsage}
+      className="text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors bg-background-subtle text-text-primary hover:bg-background-muted"
+    >
+      무료체험 리셋
+    </button>
+    <button
+      type="button"
+      onClick={onDrainUsage}
+      className="text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors bg-background-subtle text-text-danger hover:bg-background-danger-subtle"
+    >
+      무료체험 제거
+    </button>
+    {/* 구분선 */}
+    <div className="border-t border-border-subtle my-0.5" />
+    {/* 팝업 미리보기 */}
+    <button
+      type="button"
+      onClick={onShowExhaustedPopup}
+      className="text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors bg-background-subtle text-text-primary hover:bg-background-muted"
+    >
+      소진시 팝업
+    </button>
   </div>
 );
 
-/** 메일 섹션 DemoIntroText + GmailMockup + ToneFitPanel */
+// ─── 메일 섹션 ────────────────────────────────────────────────────
+
 const MailSection = () => {
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
+  const [remainingCount, setRemainingCount] = useState(() =>
+    getDemoRemaining()
+  );
   const [devForceView, setDevForceView] = useState<PanelView | undefined>(
     undefined
   );
+  // 진입 시 잔여 횟수가 0이면 소진 팝업 즉시 표시
+  const [showExhaustedPopup, setShowExhaustedPopup] = useState(
+    () => getDemoRemaining() === 0
+  );
+  /** 이메일 생성 진행 중 여부 — GmailMockup 스켈레톤 애니메이션 트리거 */
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleGenerate = (newSubject: string, newContent: string) => {
-    setSubject(newSubject);
-    setContent(newContent);
+  /** [DEV ONLY] localStorage 사용 횟수 초기화 (DEMO_DAILY_LIMIT으로 복구) */
+  const handleResetUsage = () => {
+    saveDemoRemaining(DEMO_DAILY_LIMIT);
+    setRemainingCount(DEMO_DAILY_LIMIT);
+    setShowExhaustedPopup(false);
   };
 
-  const handleReset = () => {
-    setSubject('');
-    setContent('');
+  /** [DEV ONLY] localStorage 사용 횟수를 0으로 차감 */
+  const handleDrainUsage = () => {
+    saveDemoRemaining(0);
+    setRemainingCount(0);
+    setShowExhaustedPopup(false);
+  };
+
+  /** [DEV ONLY] 체험 횟수 소진 팝업 즉시 표시 */
+  const handleShowExhaustedPopup = () => setShowExhaustedPopup(true);
+
+  /**
+   * 이메일 생성 요청 — POST /generations
+   *
+   * 무료 체험 횟수는 FE/localStorage에서만 관리 (BE 제한 없음).
+   * 성공 시: generated_subject, generated_email을 GmailMockup에 표시
+   * 실패 시: ToneFitPanel이 error 뷰로 전환 (오류 처리는 패널 내부)
+   */
+  const handleRequest = async (
+    params: GenerateParams
+  ): Promise<GenerateResult> => {
+    setIsGenerating(true);
+    try {
+      const newCount = remainingCount - 1;
+      setRemainingCount(newCount);
+      saveDemoRemaining(newCount);
+
+      const reqBody = {
+        receiver_type: params.receiver,
+        purpose: params.purpose,
+        brief_content: params.emailText,
+      };
+      devLog('[Generation] ▶ 요청', reqBody);
+
+      const response = await postGeneration(reqBody);
+      devLog('[Generation] ◀ 응답', response);
+
+      const result = {
+        subject: response.generated_subject,
+        content: response.generated_email,
+      };
+      devLog('[Generation] 매핑 결과', result);
+
+      return result;
+    } catch (err) {
+      devError('[Generation] 오류', err);
+      throw err;
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
     <>
+      {/* 횟수 소진 팝업 */}
+      {showExhaustedPopup && (
+        <ExhaustedPopup onClose={() => setShowExhaustedPopup(false)} />
+      )}
+
       <section id="mailSection" className="mail pt-14 pb-37">
         <div className="mail__inner max-w-[1320px] mx-auto">
           <div className="mail__deco flex items-center justify-center">
@@ -912,23 +996,39 @@ const MailSection = () => {
               지금 아래 데모에서 직접 경험해보세요.
             </p>
           </div>
-          <div id="demo" className="flex gap-5">
+          <div id="mail-demo" className="flex gap-5">
             <GmailMockup
               subject={subject}
               content={content}
               onSubjectChange={setSubject}
               onContentChange={setContent}
+              isLoading={isGenerating || devForceView === 'loading'}
             />
             <ToneFitPanel
-              onGenerate={handleGenerate}
-              onReset={handleReset}
+              remainingCount={remainingCount}
+              onRequest={handleRequest}
+              onSuccess={(s, c) => {
+                setSubject(s);
+                setContent(c);
+              }}
+              onReset={() => {
+                setSubject('');
+                setContent('');
+              }}
+              onExhausted={() => setShowExhaustedPopup(true)}
               devForceView={devForceView}
             />
           </div>
         </div>
       </section>
       {import.meta.env.DEV && (
-        <DevViewToolbar current={devForceView} onChange={setDevForceView} />
+        <DevViewToolbar
+          current={devForceView}
+          onChange={setDevForceView}
+          onResetUsage={handleResetUsage}
+          onDrainUsage={handleDrainUsage}
+          onShowExhaustedPopup={handleShowExhaustedPopup}
+        />
       )}
     </>
   );
@@ -938,7 +1038,7 @@ const MailSection = () => {
 const DemoFooter = () => (
   <footer className="footer w-full bg-background-page--20 border-t border-border-default px-5 py-3.5 text-base font-normal leading-6 tracking-tight text-text-secondary">
     <div className="footer__inner flex items-center justify-between">
-      <p className="footer__copy  p-2.5">
+      <p className="footer__copy p-2.5">
         © 2026 ToneFit Inc. All rights reserved.
       </p>
       <div className="footer__link p-2.5 flex gap-6 items-center">
@@ -965,6 +1065,31 @@ const DemoFooter = () => (
  * 경로: /demo
  */
 const DemoPage = () => {
+  /**
+   * 히어로 "내 첫 메일 써보기" 클릭 핸들러
+   * 1. #mail-demo(GmailMockup + ToneFitPanel) 위치로 smooth 스크롤
+   *    - 고정 헤더 높이만큼 위로 올려 요소가 헤더 아래에 딱 맞게 위치
+   *    - 추가 24px 여백으로 자연스러운 간격 확보
+   * 2. 스크롤 완료 후 ToneFitPanel 이메일 입력 textarea에 포커스
+   */
+  const handleStartDemo = () => {
+    const target = document.getElementById('mail-demo');
+    if (!target) return;
+
+    const headerHeight = document.getElementById('header')?.offsetHeight ?? 80;
+    const top =
+      target.getBoundingClientRect().top + window.scrollY - headerHeight - 24;
+
+    window.scrollTo({ top, behavior: 'smooth' });
+
+    // smooth 스크롤 완료 대기 후 포커스
+    setTimeout(() => {
+      document
+        .querySelector<HTMLTextAreaElement>('[data-panel-input="email-brief"]')
+        ?.focus();
+    }, 700);
+  };
+
   return (
     <div
       id="demo"
@@ -975,7 +1100,7 @@ const DemoPage = () => {
     >
       <DemoHeader />
       <main className="demo__contents">
-        <HeroSection />
+        <HeroSection onStartDemo={handleStartDemo} />
         <MailSection />
       </main>
       <DemoFooter />
