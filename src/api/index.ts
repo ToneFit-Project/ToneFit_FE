@@ -1,11 +1,12 @@
 /**
  * ToneFit API 클라이언트
  *
- * Axios 인스턴스를 생성하고 인터셉터를 설정합니다.
+ * API 명세 v0.53 기준
  *
- * 인터셉터란?
- * → 요청/응답이 오갈 때 중간에서 가로채서 공통 처리를 해주는 미들웨어예요.
- * → 예) 모든 요청에 토큰 자동 첨부, 401 에러 시 자동 토큰 갱신
+ * 토큰 정책:
+ * - access_token  → sessionStorage (탭 닫으면 자동 만료)
+ * - refresh_token → HttpOnly + Secure Cookie (브라우저 자동 송수신)
+ *   → FE에서 직접 다루지 않음. `credentials: 'include'`로 자동 처리.
  */
 
 import axios from 'axios';
@@ -13,45 +14,35 @@ import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { STORAGE_KEYS } from '@/constants';
 import { devLog, devError } from '@/utils/devLog';
 import type {
-  // Auth
+  // Anonymous
   AnonymousSession,
   AnonymousTokenResponse,
-  SignupRequest,
-  SignupResponse,
-  LoginRequest,
-  LoginResponse,
-  RefreshRequest,
+  // Auth
+  GoogleAuthRequest,
+  GoogleAuthResponse,
   RefreshResponse,
-  LogoutRequest,
   // Users
   UserProfile,
-  UpdateProfileRequest,
+  ToggleTermsRequest,
+  TermsType,
   // Corrections
   DraftRequest,
   DraftResponse,
   DraftDetailResponse,
   CorrectionRequest,
   CorrectionResponse,
-  RecorrectRequest,
-  RecorrectResponse,
   RejectRequest,
   RejectResponse,
-  FinalizeResponse,
-  EditRequest,
-  EditResponse,
   ConfirmRequest,
   ConfirmResponse,
+  // Generations
+  GenerationRequest,
+  GenerationResponse,
   // History
   InProgressSessionsResponse,
   HistoryResponse,
   HistoryParams,
   SessionDetailResponse,
-  // Credits & Payments
-  CreditsResponse,
-  PurchaseCreditsRequest,
-  PurchaseCreditsResponse,
-  SubscribePlanRequest,
-  SubscribePlanResponse,
 } from '@/types';
 
 // =============================================================
@@ -59,28 +50,36 @@ import type {
 // =============================================================
 
 const apiClient: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL, // .env의 VITE_API_URL 사용
-  timeout: 15000, // 15초 타임아웃
+  baseURL: import.meta.env.VITE_API_URL,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
+  // refresh_token HttpOnly Cookie 자동 송수신
+  withCredentials: true,
 });
 
 // =============================================================
-// 요청 인터셉터 (FUNC-NON-03)
-// 모든 API 요청이 나가기 전에 실행돼요.
-// sessionStorage의 Access Token을 자동으로 헤더에 붙여줍니다.
+// Visit Session ID
+// 탭 단위 세션 식별자 — BE 이벤트 로그에 기록됨
+// =============================================================
+
+const VISIT_SESSION_ID = crypto.randomUUID();
+
+// =============================================================
+// 요청 인터셉터
+// - access_token 헤더 자동 주입
+// - X-Visit-Session-Id 헤더 추가
 // =============================================================
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // sessionStorage에서 Access Token 읽기
-    // (익명/정식 회원 공용 — 탭 닫으면 자동 만료)
     const accessToken = sessionStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
+
+    config.headers['X-Visit-Session-Id'] = VISIT_SESSION_ID;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (config as any)._startTime = Date.now();
@@ -95,54 +94,35 @@ apiClient.interceptors.request.use(
 );
 
 // =============================================================
-// 응답 인터셉터 (FUNC-NON-04, 05, 06)
-// - 401: refreshToken으로 자동 갱신 후 재요청 (FUNC-NON-04)
-// - 401/403 갱신 실패: 토큰 전부 삭제 + 초기 상태 리셋 (FUNC-NON-06)
-// - 429: IP 차단 안내용 에러 throw (FUNC-NON-05)
-// - 중복 갱신 방지: 갱신 중 요청은 큐에 쌓아 순서대로 처리 (FUNC-NON-04)
+// 응답 인터셉터
+// - { success, data, error } 래퍼 자동 unwrap
+// - 401: /auth/refresh 호출 후 재요청 (cookie 자동 송신)
+// - 401/403 갱신 실패: access_token 삭제 + 홈으로 리다이렉트
+// - 429: 그대로 throw
 // =============================================================
 
-/** 토큰 갱신 진행 중 여부 플래그 */
 let isRefreshing = false;
-
-/**
- * 갱신 대기 중인 요청 콜백 큐
- * 갱신 완료 후 저장된 순서대로 재처리합니다.
- */
 let failedQueue: Array<{
   resolve: (token: string) => void;
   reject: (error: unknown) => void;
 }> = [];
 
-/**
- * 대기 큐를 처리하는 내부 헬퍼
- * @param error  갱신 실패 시 전달할 에러 (성공 시 null)
- * @param token  갱신 성공 시 전달할 새 accessToken (실패 시 null)
- */
 const processQueue = (error: unknown, token: string | null = null): void => {
   failedQueue.forEach(({ resolve, reject }) => {
-    if (error) {
-      reject(error);
-    } else if (token) {
-      resolve(token);
-    }
+    if (error) reject(error);
+    else if (token) resolve(token);
   });
   failedQueue = [];
 };
 
-/**
- * 모든 토큰을 삭제하고 세션을 초기화합니다. (FUNC-NON-06)
- * Refresh Token 만료 또는 401/403 갱신 실패 시 호출됩니다.
- */
-const clearAllTokens = (): void => {
+/** access_token 삭제 (refresh_token은 쿠키 — BE 로그아웃 시 만료됨) */
+const clearAccessToken = (): void => {
   sessionStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-  localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
 };
 
 apiClient.interceptors.response.use(
-  // 성공 응답: { success, data, error } 래퍼 자동 unwrap
   (response) => {
-    // 백엔드가 { success: true, data: {...}, error: null } 형태로 감싸는 경우 내부 data만 꺼냄
+    // { success: true, data: {...} } 래퍼 unwrap
     if (
       response.data !== null &&
       typeof response.data === 'object' &&
@@ -152,7 +132,6 @@ apiClient.interceptors.response.use(
       response.data = response.data.data;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const elapsed =
       Date.now() - ((response.config as any)._startTime ?? Date.now());
     devLog(
@@ -163,12 +142,10 @@ apiClient.interceptors.response.use(
     return response;
   },
 
-  // 에러 응답 처리
   async (error) => {
     const originalRequest = error.config;
     const status: number | undefined = error.response?.status;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const elapsed =
       Date.now() - ((originalRequest as any)._startTime ?? Date.now());
     devError(
@@ -176,16 +153,13 @@ apiClient.interceptors.response.use(
       error.response?.data ?? error.message
     );
 
-    // ── 429 Too Many Requests (FUNC-NON-05) ──
-    // IP 차단 안내를 위해 그대로 throw — 호출부에서 처리
+    // 429 Too Many Requests — 호출부에서 처리
     if (status === 429) {
       return Promise.reject(error);
     }
 
-    // ── 401 Unauthorized ──
-    // 아직 재시도하지 않은 요청에 한해 토큰 갱신 시도 (FUNC-NON-04)
+    // 401 Unauthorized — refresh_token(cookie)으로 갱신 시도
     if (status === 401 && !originalRequest._retry) {
-      // 이미 갱신 중이면 큐에 추가하고 대기 (중복 갱신 방지)
       if (isRefreshing) {
         return new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -200,58 +174,35 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const storedRefreshToken = localStorage.getItem(
-        STORAGE_KEYS.REFRESH_TOKEN
-      );
-
-      // refreshToken 없음 → 세션 초기화 후 온보딩으로 이동
-      if (!storedRefreshToken) {
-        processQueue(error, null);
-        isRefreshing = false;
-        clearAllTokens();
-        window.location.href = '/';
-        return Promise.reject(error);
-      }
-
       try {
-        // refreshToken으로 새 accessToken 발급
-        // apiClient 사용 → { success, data, error } 래퍼 자동 unwrap
-        const response = await apiClient.post<RefreshResponse>(
-          '/auth/refresh',
-          { refresh_token: storedRefreshToken }
-        );
+        // body 없음 — refresh_token은 cookie로 자동 송신
+        const response = await apiClient.post<RefreshResponse>('/auth/refresh');
+        const { access_token } = response.data;
 
-        const { access_token, refresh_token } = response.data;
-
-        // 새 토큰 저장 (accessToken → sessionStorage, refreshToken → localStorage)
         sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
-        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refresh_token);
+        apiClient.defaults.headers.common['Authorization'] =
+          `Bearer ${access_token}`;
 
-        // 대기 중이던 요청들 순서대로 재처리
         processQueue(null, access_token);
         isRefreshing = false;
 
-        // 원래 요청 재시도
         originalRequest.headers.Authorization = `Bearer ${access_token}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        // refreshToken도 만료/무효 → 전체 세션 초기화 (FUNC-NON-06)
         processQueue(refreshError, null);
         isRefreshing = false;
-        clearAllTokens();
+        clearAccessToken();
         window.location.href = '/';
         return Promise.reject(refreshError);
       }
     }
 
-    // ── 403 Forbidden ──
-    // 교정 관련 엔드포인트는 리소스 권한 문제일 수 있으므로 그냥 reject (호출부에서 처리)
-    // 그 외 403은 세션 타입 불일치(만료된 익명 세션 등) → 토큰 초기화 후 홈으로 (FUNC-NON-06)
+    // 403 Forbidden
     if (status === 403) {
       const url = originalRequest?.url ?? '';
       const isCorrectionsEndpoint = url.includes('/corrections');
       if (!isCorrectionsEndpoint) {
-        clearAllTokens();
+        clearAccessToken();
         window.location.href = '/';
       }
       return Promise.reject(error);
@@ -262,122 +213,76 @@ apiClient.interceptors.response.use(
 );
 
 // =============================================================
-// 0. 익명 세션 API (Anonymous Session)
+// 0. 익명 세션 (Anonymous Session)
 // =============================================================
 
 /**
- * 익명 토큰 발급 (FUNC-NON-02)
+ * 익명 토큰 발급 — 앱 최초 진입 시 호출
  *
- * 앱 최초 진입 시 호출합니다.
- * 서버에서 임시 anonymousId + 토큰 쌍을 발급받아 저장합니다.
+ * - access_token    → sessionStorage
+ * - anonymous_token → localStorage (재식별용)
+ * - refresh_token   → Set-Cookie (HttpOnly, FE 미관리)
  *
- * 저장 전략:
- * - accessToken  → sessionStorage (탭/브라우저 닫으면 자동 만료)
- * - refreshToken → localStorage   (30일 유지)
- *
- * @returns 발급된 익명 세션 정보
- * @throws 네트워크 오류 또는 서버 오류 시 에러 throw — 호출부에서 핸들링
- *
- * @example
- * try {
- *   const session = await issueAnonymousToken();
- *   // 이후 apiClient 요청에 자동으로 토큰 첨부됨
- * } catch (error) {
- *   // 오프라인 등 발급 실패 처리
- * }
+ * localStorage에 기존 anonymous_token이 있으면 함께 전송해
+ * BE가 이전 익명 유저로 재연결할 수 있도록 합니다.
  */
 export const issueAnonymousToken = async (): Promise<AnonymousSession> => {
-  // apiClient 사용 → 응답 인터셉터의 { success, data, error } unwrap 자동 적용
-  const response =
-    await apiClient.post<AnonymousTokenResponse>('/auth/anonymous');
+  const existingAnonToken = localStorage.getItem(STORAGE_KEYS.ANONYMOUS_TOKEN);
 
-  const {
-    user_id,
-    is_guest,
-    plan,
-    anonymous_token,
-    access_token,
-    refresh_token,
-  } = response.data;
+  const response = await apiClient.post<AnonymousTokenResponse>(
+    '/auth/anonymous',
+    existingAnonToken ? { anonymous_token: existingAnonToken } : undefined
+  );
 
-  const session: AnonymousSession = {
+  const { user_id, is_guest, plan, anonymous_token, access_token } =
+    response.data;
+
+  sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
+  localStorage.setItem(STORAGE_KEYS.ANONYMOUS_TOKEN, anonymous_token);
+
+  return {
     userId: user_id,
     isGuest: is_guest,
     plan,
     anonymousToken: anonymous_token,
     accessToken: access_token,
-    refreshToken: refresh_token,
   };
-
-  // 토큰 저장 (토큰 값은 로그로 노출하지 않음)
-  sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, session.accessToken);
-  localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, session.refreshToken);
-  localStorage.setItem(STORAGE_KEYS.ANON_TOKEN, session.anonymousToken);
-
-  return session;
 };
 
 /**
- * 회원 가입 후 익명 토큰 → 정식 회원 토큰으로 교체 (FUNC-NON-08)
+ * Google OAuth 로그인 / 신규 가입 / 게스트 전환
  *
- * 회원가입 또는 로그인 성공 직후 호출합니다.
- * 기존 익명 토큰을 모두 삭제하고, 정식 회원 토큰으로 교체합니다.
- *
- * @param accessToken  회원가입/로그인 응답의 access_token
- * @param refreshToken 회원가입/로그인 응답의 refresh_token
- *
- * @example
- * const data = await signup(formData);
- * exchangeToken(data.access_token, data.refresh_token);
- * navigate(ROUTES.DASHBOARD);
+ * 성공 후 access_token을 sessionStorage에 저장.
+ * refresh_token은 Set-Cookie로 자동 관리됨.
  */
-export const exchangeToken = (
-  accessToken: string,
-  refreshToken: string
-): void => {
-  // 기존 익명 토큰 전부 삭제
-  sessionStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-  localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+export const googleAuth = async (
+  data: GoogleAuthRequest
+): Promise<GoogleAuthResponse> => {
+  const response = await apiClient.post<GoogleAuthResponse>(
+    '/auth/google',
+    data
+  );
+  const { access_token } = response.data;
 
-  // 정식 회원 토큰 저장
-  sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-  localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+  sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
+  apiClient.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
-  // Axios 인스턴스 기본 헤더 즉시 반영
-  apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-};
-
-// =============================================================
-// 1. 인증 API (Auth)
-// =============================================================
-
-/** 회원가입 */
-export const signup = async (data: SignupRequest): Promise<SignupResponse> => {
-  const response = await apiClient.post<SignupResponse>('/auth/signup', data);
   return response.data;
 };
 
-/** 로그인 */
-export const login = async (data: LoginRequest): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>('/auth/login', data);
-  return response.data;
-};
-
-/** 토큰 갱신 */
-export const refreshToken = async (
-  data: RefreshRequest
-): Promise<RefreshResponse> => {
-  const response = await apiClient.post<RefreshResponse>('/auth/refresh', data);
-  return response.data;
-};
-
-/** 로그아웃 */
-export const logout = async (data: LogoutRequest): Promise<void> => {
-  await apiClient.post('/auth/logout', data);
+/**
+ * 로그아웃
+ *
+ * BE에서 refresh_token row 삭제 + cookie 만료 헤더 발급.
+ * FE는 access_token만 삭제.
+ */
+export const logout = async (): Promise<void> => {
+  await apiClient.post('/auth/logout');
+  clearAccessToken();
 };
 
 // =============================================================
-// 2. 사용자 API (Users)
+// 2. 사용자 (Users)
 // =============================================================
 
 /** 내 정보 조회 */
@@ -386,19 +291,22 @@ export const getMyProfile = async (): Promise<UserProfile> => {
   return response.data;
 };
 
-/** 내 정보 수정 */
-export const updateMyProfile = async (
-  data: UpdateProfileRequest
-): Promise<UserProfile> => {
-  const response = await apiClient.patch<UserProfile>('/users/me', data);
-  return response.data;
+/**
+ * 선택 약관 토글 (철회 / 재동의)
+ * 필수 약관(SERVICE/PRIVACY/ANALYTICS)에는 호출 불가
+ */
+export const toggleTerms = async (
+  type: TermsType,
+  data: ToggleTermsRequest
+): Promise<void> => {
+  await apiClient.patch(`/users/me/terms/${type}`, data);
 };
 
 // =============================================================
-// 3. 교정 API (Corrections)
+// 3. 교정 (Corrections)
 // =============================================================
 
-/** 임시저장 (Draft) — 사용자당 1건 유지, PUT으로 덮어쓰기 */
+/** 임시저장 — 사용자당 1건 유지, PUT으로 덮어쓰기 */
 export const saveDraft = async (data: DraftRequest): Promise<DraftResponse> => {
   const response = await apiClient.put<DraftResponse>(
     '/corrections/draft',
@@ -414,7 +322,7 @@ export const getDraft = async (): Promise<DraftDetailResponse> => {
   return response.data;
 };
 
-/** 교정 요청 (1차) */
+/** 교정 요청 */
 export const requestCorrection = async (
   data: CorrectionRequest
 ): Promise<CorrectionResponse> => {
@@ -427,35 +335,7 @@ export const requestCorrection = async (
   return response.data;
 };
 
-/**
- * FAILED 세션 재시도
- * Gemini API 실패 후 동일 입력으로 재시도 — 과금 없음
- */
-export const retryCorrection = async (
-  sessionId: number
-): Promise<CorrectionResponse> => {
-  const response = await apiClient.post<CorrectionResponse>(
-    `/corrections/${sessionId}/retry`
-  );
-  return response.data;
-};
-
-/** 재교정 요청 */
-export const recorrect = async (
-  sessionId: number,
-  data: RecorrectRequest
-): Promise<RecorrectResponse> => {
-  const response = await apiClient.post<RecorrectResponse>(
-    `/corrections/${sessionId}/recorrect`,
-    data
-  );
-  return response.data;
-};
-
-/**
- * 교정 거부 (사유 포함)
- * 특정 교정 건을 거부하고 사유를 함께 기록합니다. action = REJECTED 즉시 반영.
- */
+/** 교정 거부 (사유 포함) */
 export const rejectCorrection = async (
   sessionId: number,
   data: RejectRequest
@@ -467,39 +347,7 @@ export const rejectCorrection = async (
   return response.data;
 };
 
-/**
- * 최종 다듬기
- * 거절된 원문 + 수락된 교정문을 고정하여 다듬기. AI 추천 제목 함께 생성.
- * Request Body 없음.
- */
-export const finalizeCorrection = async (
-  sessionId: number
-): Promise<FinalizeResponse> => {
-  // AI 최종본 생성(ai_final, ai_subject)이 포함되어 시간이 오래 걸릴 수 있음 → 60초로 연장
-  const response = await apiClient.post<FinalizeResponse>(
-    `/corrections/${sessionId}/finalize`,
-    undefined,
-    { timeout: 60000 }
-  );
-  return response.data;
-};
-
-/**
- * 사용자 편집 저장
- * 사용자가 편집한 본문/제목을 저장합니다. 변경할 필드만 전송.
- */
-export const editCorrection = async (
-  sessionId: number,
-  data: EditRequest
-): Promise<EditResponse> => {
-  const response = await apiClient.patch<EditResponse>(
-    `/corrections/${sessionId}/edit`,
-    data
-  );
-  return response.data;
-};
-
-/** 교정 확정 (복사하기) */
+/** 교정 확정 (송신) */
 export const confirmCorrection = async (
   sessionId: number,
   data: ConfirmRequest
@@ -512,10 +360,32 @@ export const confirmCorrection = async (
 };
 
 // =============================================================
-// 4. 교정 이력 API (History)
+// 4. 생성 (Generations)
 // =============================================================
 
-/** 미완료 이력 조회 (IN_PROGRESS + FAILED) */
+/**
+ * 이메일 생성
+ *
+ * 저장 없음 — 히스토리에 노출되지 않는 일회성 결과.
+ * 무료 체험 횟수는 FE/localStorage에서 카운트 (BE 제한 없음).
+ */
+export const postGeneration = async (
+  data: GenerationRequest
+): Promise<GenerationResponse> => {
+  // Gemini AI 호출 → 60초로 연장
+  const response = await apiClient.post<GenerationResponse>(
+    '/generations',
+    data,
+    { timeout: 60000 }
+  );
+  return response.data;
+};
+
+// =============================================================
+// 5. 교정 이력 (History)
+// =============================================================
+
+/** 미완료 이력 조회 (IN_PROGRESS) */
 export const getInProgressSessions =
   async (): Promise<InProgressSessionsResponse> => {
     const response = await apiClient.get<InProgressSessionsResponse>(
@@ -530,9 +400,7 @@ export const getHistory = async (
 ): Promise<HistoryResponse> => {
   const response = await apiClient.get<HistoryResponse>(
     '/corrections/history',
-    {
-      params,
-    }
+    { params }
   );
   return response.data;
 };
@@ -543,38 +411,6 @@ export const getSessionDetail = async (
 ): Promise<SessionDetailResponse> => {
   const response = await apiClient.get<SessionDetailResponse>(
     `/corrections/${sessionId}`
-  );
-  return response.data;
-};
-
-// =============================================================
-// 5. 크레딧 & 결제 API (Credits & Payments)
-// =============================================================
-
-/** 크레딧 잔액 + 거래 내역 조회 */
-export const getCredits = async (): Promise<CreditsResponse> => {
-  const response = await apiClient.get<CreditsResponse>('/credits');
-  return response.data;
-};
-
-/** 크레딧 구매 */
-export const purchaseCredits = async (
-  data: PurchaseCreditsRequest
-): Promise<PurchaseCreditsResponse> => {
-  const response = await apiClient.post<PurchaseCreditsResponse>(
-    '/credits/purchase',
-    data
-  );
-  return response.data;
-};
-
-/** PRO 플랜 구독 */
-export const subscribePlan = async (
-  data: SubscribePlanRequest
-): Promise<SubscribePlanResponse> => {
-  const response = await apiClient.post<SubscribePlanResponse>(
-    '/payments/subscribe',
-    data
   );
   return response.data;
 };
