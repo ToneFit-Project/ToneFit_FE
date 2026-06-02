@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROUTES, STORAGE_KEYS } from '@/constants';
-import { issueAnonymousToken } from '@/api';
+import apiClient, { issueAnonymousToken } from '@/api';
 // ─────────────────────────────────────────────────────────────────
 // import 페이지
 // home - 공용레이아웃, 교정시작, 교정로딩, 교정비교, 교정완료(로딩), 교정결과
 import Layout from '@/components/layout/Layout';
+import JoinAcceptPage from '@/pages/auth/JoinAcceptPage';
 import EditorPage from '@/pages/home/EditorPage';
 import EditorProcessingPage from '@/pages/home/EditorProcessingPage';
 import EditorResultPage from '@/pages/home/EditorResultPage';
@@ -49,7 +50,7 @@ const App = () => {
   const issuedRef = useRef(false);
 
   useEffect(() => {
-    // 이미 발급된 토큰이 있으면 재발급 불필요
+    // 이미 유효한 access_token이 있으면 불필요
     const existingToken = sessionStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     if (existingToken) return;
 
@@ -57,13 +58,34 @@ const App = () => {
     if (issuedRef.current) return;
     issuedRef.current = true;
 
-    // 익명 토큰 발급 (FUNC-NON-01, 02)
-    // 앱 최초 진입 시 서버에서 임시 userId + 토큰 발급
-    issueAnonymousToken().catch((error) => {
-      // 네트워크 오류 등 발급 실패 — 사용자는 그냥 진행하되 API 호출 시 실패 처리
-      console.error('[App] 익명 토큰 발급 실패:', error);
-      issuedRef.current = false; // 재시도 허용
-    });
+    const initSession = async () => {
+      // 1순위: refresh_token 쿠키로 access_token 재발급 시도
+      //   - 탭을 닫았다 재방문해도 쿠키가 살아있으면 (익명 7일 / 정식 30일)
+      //     기존 세션을 그대로 복구할 수 있음
+      try {
+        const { data } = await apiClient.post<{ access_token: string }>(
+          '/auth/refresh'
+        );
+        sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token);
+        apiClient.defaults.headers.common['Authorization'] =
+          `Bearer ${data.access_token}`;
+        return;
+      } catch {
+        // refresh_token 만료 또는 없음 → 2순위로 진행
+      }
+
+      // 2순위: 익명 토큰 신규 발급
+      //   - localStorage의 anonymous_token이 있으면 함께 전송해
+      //     BE가 이전 익명 유저로 재연결 (데이터 연속성 유지)
+      try {
+        await issueAnonymousToken();
+      } catch (error) {
+        console.error('[App] 세션 초기화 실패:', error);
+        issuedRef.current = false; // 재시도 허용
+      }
+    };
+
+    initSession();
   }, []);
 
   return (
@@ -74,14 +96,16 @@ const App = () => {
         element={<Navigate to={ROUTES.DEMO} replace />}
       />
 
+      {/* ── 약관 동의 라우트 (Google OAuth 흐름에서 자동 진입) ── */}
+      {/* AuthLayout은 디자인 확정 후 적용 예정 */}
+      <Route path={ROUTES.JOIN_ACCEPT} element={<JoinAcceptPage />} />
+
       {/* MVP를 위한 임시삭제 */}
-      {/* ── 인증 라우트 (AuthLayout 적용: 카드 레이아웃) ── */}
+      {/* ── 나머지 인증 라우트 (로그인 버튼 구현 시 활성화) ── */}
       {/* <Route element={<AuthLayout variant="center" />}>
         <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       </Route>
-
       <Route element={<AuthLayout variant="top" />}>
-        <Route path={ROUTES.JOIN_ACCEPT} element={<JoinAcceptPage />} />
         <Route path={ROUTES.JOIN_INFO} element={<JoinInfoPage />} />
         <Route path={ROUTES.JOIN_COMPLETE} element={<JoinCompletePage />} />
       </Route> */}
