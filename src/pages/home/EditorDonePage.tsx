@@ -7,7 +7,10 @@ import {
   RECEIVER_TYPE_LABELS,
   PURPOSE_LABELS,
 } from '@/constants';
-import { MOCK_CORRECTION_RESPONSE } from '@/mocks/handlers';
+import {
+  MOCK_CORRECTION_RESPONSE,
+  MOCK_CORRECTED_EMAIL,
+} from '@/mocks/handlers';
 import type {
   CorrectionChange,
   FeedbackActionType,
@@ -40,7 +43,7 @@ interface DoneLocationState {
 
 const MOCK_STATE: DoneLocationState = {
   sessionId: 1,
-  finalEmail: MOCK_CORRECTION_RESPONSE.corrected_email,
+  finalEmail: MOCK_CORRECTED_EMAIL,
   receiverType: 'DIRECT_SUPERVISOR',
   purposeType: 'REPORT',
   changes: MOCK_CORRECTION_RESPONSE.changes.map((c, i) => ({

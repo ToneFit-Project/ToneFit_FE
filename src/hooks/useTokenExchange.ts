@@ -19,7 +19,8 @@
  */
 
 import { useState, useCallback } from 'react';
-import { exchangeToken } from '@/api';
+import apiClient from '@/api';
+import { STORAGE_KEYS } from '@/constants';
 
 // =============================================================
 // 타입
@@ -89,14 +90,16 @@ const useTokenExchange = (): UseTokenExchangeReturn => {
    * async 래퍼로 감싸 에러 상태를 관리합니다.
    */
   const retry = useCallback(
-    async (accessToken: string, refreshToken: string): Promise<void> => {
+    async (accessToken: string, _refreshToken: string): Promise<void> => {
       setIsLoading(true);
       setIsError(false);
       setErrorMessage(null);
 
       try {
-        // 토큰 교체 실행 (sessionStorage + localStorage + Axios 헤더 갱신)
-        exchangeToken(accessToken, refreshToken);
+        // 토큰 교체: sessionStorage + Axios 헤더 갱신
+        sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+        apiClient.defaults.headers.common['Authorization'] =
+          `Bearer ${accessToken}`;
       } catch (error) {
         setIsError(true);
         setErrorMessage(getErrorMessage(error));
