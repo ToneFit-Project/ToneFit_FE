@@ -15,7 +15,6 @@ import { STORAGE_KEYS } from '@/constants';
 import { devLog, devError } from '@/utils/devLog';
 import type {
   // Anonymous
-  AnonymousSession,
   AnonymousTokenResponse,
   // Auth
   GoogleAuthRequest,
@@ -220,36 +219,16 @@ apiClient.interceptors.response.use(
 // =============================================================
 
 /**
- * 익명 토큰 발급 — 앱 최초 진입 시 호출
+ * 익명 세션 발급 — 앱 최초 진입 시 호출
  *
- * - access_token    → localStorage
- * - anonymous_token → localStorage (재식별용)
- * - refresh_token   → Set-Cookie (HttpOnly, FE 미관리)
- *
- * localStorage에 기존 anonymous_token이 있으면 함께 전송해
- * BE가 이전 익명 유저로 재연결할 수 있도록 합니다.
+ * - access_token  → localStorage
+ * - refresh_token → Set-Cookie (HttpOnly, FE 미관리)
  */
-export const issueAnonymousToken = async (): Promise<AnonymousSession> => {
-  const existingAnonToken = localStorage.getItem(STORAGE_KEYS.ANONYMOUS_TOKEN);
-
-  const response = await apiClient.post<AnonymousTokenResponse>(
-    '/auth/anonymous',
-    existingAnonToken ? { anonymous_token: existingAnonToken } : undefined
-  );
-
-  const { user_id, is_guest, plan, anonymous_token, access_token } =
-    response.data;
-
+export const issueAnonymousToken = async (): Promise<void> => {
+  const response =
+    await apiClient.post<AnonymousTokenResponse>('/auth/anonymous');
+  const { access_token } = response.data;
   localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
-  localStorage.setItem(STORAGE_KEYS.ANONYMOUS_TOKEN, anonymous_token);
-
-  return {
-    userId: user_id,
-    isGuest: is_guest,
-    plan,
-    anonymousToken: anonymous_token,
-    accessToken: access_token,
-  };
 };
 
 /**

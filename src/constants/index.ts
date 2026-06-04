@@ -171,12 +171,6 @@ export const STORAGE_KEYS = {
    */
   ACCESS_TOKEN: 'tf_access_token',
   /**
-   * 익명 사용자 토큰 (anonymous_token)
-   * 저장 위치: localStorage — 익명 세션 재식별용, 브라우저 재시작 후에도 유지
-   * refresh_token은 HttpOnly Cookie로 자동 관리 — FE에서 직접 다루지 않음
-   */
-  ANONYMOUS_TOKEN: 'tf_anon_token',
-  /**
    * 암호화된 이메일 초안
    * 저장 위치: localStorage — AES-GCM 암호문 (base64)
    */

@@ -74,9 +74,7 @@ const App = () => {
         // refresh_token 만료 또는 없음 → 2순위로 진행
       }
 
-      // 2순위: 익명 토큰 신규 발급
-      //   - localStorage의 anonymous_token이 있으면 함께 전송해
-      //     BE가 이전 익명 유저로 재연결 (데이터 연속성 유지)
+      // 2순위: 익명 세션 신규 발급
       try {
         await issueAnonymousToken();
       } catch (error) {

@@ -106,25 +106,6 @@ export interface ProtectedRange {
 // =============================================================
 
 /**
- * 익명 세션 정보
- * 앱 최초 진입 시 서버에서 발급받아 저장하는 임시 세션 데이터
- *
- * refresh_token은 HttpOnly Cookie로 자동 관리 — FE에서 직접 다루지 않음
- */
-export interface AnonymousSession {
-  /** 서버가 발급한 유저 ID (익명 유저도 user_id 보유) */
-  userId: number;
-  /** 익명 유저 여부 (항상 true) */
-  isGuest: boolean;
-  /** 플랜 (익명은 항상 FREE) */
-  plan: PlanType;
-  /** 익명 세션 고유 토큰 — localStorage 저장, 세션 재식별용 */
-  anonymousToken: string;
-  /** 접근 토큰 (유효기간 1시간) — sessionStorage 저장 */
-  accessToken: string;
-}
-
-/**
  * JWT 페이로드 구조
  * 토큰을 decode했을 때 얻는 클레임 정보
  */
@@ -147,7 +128,6 @@ export interface AnonymousTokenResponse {
   user_id: number;
   is_guest: boolean;
   plan: PlanType;
-  anonymous_token: string;
   access_token: string;
 }
 

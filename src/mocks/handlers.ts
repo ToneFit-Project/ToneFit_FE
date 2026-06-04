@@ -99,7 +99,6 @@ const authHandlers = [
         user_id: 'dev-anon-user-001',
         is_guest: true,
         plan: 'FREE',
-        anonymous_token: 'dev-mock-anonymous-token',
         access_token: 'dev-mock-access-token',
         refresh_token: 'dev-mock-refresh-token',
       },
