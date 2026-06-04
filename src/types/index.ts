@@ -120,17 +120,6 @@ export interface TokenPayload {
   exp: number;
 }
 
-/**
- * POST /auth/anonymous 응답 (서버 snake_case)
- * refresh_token은 Set-Cookie로만 발급 — 응답 body에 없음
- */
-export interface AnonymousTokenResponse {
-  user_id: number;
-  is_guest: boolean;
-  plan: PlanType;
-  access_token: string;
-}
-
 // =============================================================
 // 인증 (Auth) — Google OAuth 단일 흐름
 // =============================================================

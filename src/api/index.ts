@@ -14,8 +14,6 @@ import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { STORAGE_KEYS } from '@/constants';
 import { devLog, devError } from '@/utils/devLog';
 import type {
-  // Anonymous
-  AnonymousTokenResponse,
   // Auth
   GoogleAuthRequest,
   GoogleAuthResponse,
@@ -158,8 +156,7 @@ apiClient.interceptors.response.use(
     }
 
     // 401 Unauthorized — refresh_token(cookie)으로 갱신 시도
-    // /auth/refresh 자체가 401이면 인터셉터에서 처리하지 않음
-    // → App.tsx catch 블록에서 issueAnonymousToken() 호출로 이어짐
+    // /auth/refresh 자체가 401이면 인터셉터에서 처리하지 않음 (App.tsx catch로 전달)
     const isRefreshEndpoint = originalRequest?.url?.includes('/auth/refresh');
     if (status === 401 && !originalRequest._retry && !isRefreshEndpoint) {
       if (isRefreshing) {
@@ -213,23 +210,6 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-// =============================================================
-// 0. 익명 세션 (Anonymous Session)
-// =============================================================
-
-/**
- * 익명 세션 발급 — 앱 최초 진입 시 호출
- *
- * - access_token  → localStorage
- * - refresh_token → Set-Cookie (HttpOnly, FE 미관리)
- */
-export const issueAnonymousToken = async (): Promise<void> => {
-  const response =
-    await apiClient.post<AnonymousTokenResponse>('/auth/anonymous');
-  const { access_token } = response.data;
-  localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
-};
 
 /**
  * Google OAuth 로그인 / 신규 가입 / 게스트 전환

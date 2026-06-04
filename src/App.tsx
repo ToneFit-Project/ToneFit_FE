@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROUTES, STORAGE_KEYS } from '@/constants';
-import apiClient, { issueAnonymousToken } from '@/api';
+import apiClient from '@/api';
 // ─────────────────────────────────────────────────────────────────
 // import 페이지
 // home - 공용레이아웃, 교정시작, 교정로딩, 교정비교, 교정완료(로딩), 교정결과
@@ -58,10 +58,9 @@ const App = () => {
     if (issuedRef.current) return;
     issuedRef.current = true;
 
+    // refresh_token 쿠키로 access_token 재발급 시도 (로그인된 Extension 사용자)
+    // 실패 시 그냥 진행 — 웹 데모는 인증 없이 POST /generations 직접 호출
     const initSession = async () => {
-      // 1순위: refresh_token 쿠키로 access_token 재발급 시도
-      //   - 탭을 닫았다 재방문해도 쿠키가 살아있으면 (익명 7일 / 정식 30일)
-      //     기존 세션을 그대로 복구할 수 있음
       try {
         const { data } = await apiClient.post<{ access_token: string }>(
           '/auth/refresh'
@@ -69,17 +68,8 @@ const App = () => {
         localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token);
         apiClient.defaults.headers.common['Authorization'] =
           `Bearer ${data.access_token}`;
-        return;
       } catch {
-        // refresh_token 만료 또는 없음 → 2순위로 진행
-      }
-
-      // 2순위: 익명 세션 신규 발급
-      try {
-        await issueAnonymousToken();
-      } catch (error) {
-        console.error('[App] 세션 초기화 실패:', error);
-        issuedRef.current = false; // 재시도 허용
+        // refresh_token 없음 (미로그인 / 데모 사용자) → 인증 없이 진행
       }
     };
 
