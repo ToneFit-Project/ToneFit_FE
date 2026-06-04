@@ -9,6 +9,7 @@ import type {
 } from '@/components/panel';
 import { postGeneration } from '@/api';
 import { devLog, devError } from '@/utils/devLog';
+import useGoogleAuth from '@/hooks/useGoogleAuth';
 import imgHeroEmail from '@/assets/here_content.png';
 import imgLogo from '@/assets/logo.svg';
 import imgToolbar from '@/assets/toolbar.svg';
@@ -53,15 +54,45 @@ const DEMO_DAILY_LIMIT = 3;
 // ─── 데모 사용 횟수 (localStorage) ───────────────────────────────
 const DEMO_USAGE_KEY = 'tonefit_demo_usage';
 
+/**
+ * 생성 시도 상태 키
+ *
+ * pending : 생성 요청 중 (로딩 중 이탈 → 차감 유지)
+ * failed  : 생성 실패   (실패 후 이탈 → 차감 복구)
+ *
+ * 성공 시 삭제, 재시도 시 pending으로 갱신
+ */
+const DEMO_ATTEMPT_KEY = 'tonefit_demo_attempt';
+
 interface DemoUsage {
   count: number;
   date: string; // 'YYYY-MM-DD'
+}
+
+interface DemoAttemptState {
+  countBefore: number;
+  status: 'pending' | 'failed';
 }
 
 const getTodayString = () => new Date().toISOString().slice(0, 10);
 
 const getDemoRemaining = (): number => {
   try {
+    // 이전 시도 상태 확인
+    const attemptRaw = localStorage.getItem(DEMO_ATTEMPT_KEY);
+    if (attemptRaw) {
+      const { countBefore, status } = JSON.parse(
+        attemptRaw
+      ) as DemoAttemptState;
+      localStorage.removeItem(DEMO_ATTEMPT_KEY);
+      if (status === 'failed') {
+        // 실패 후 이탈 → 차감 전 횟수로 복구
+        saveDemoRemaining(countBefore);
+        return countBefore;
+      }
+      // pending (로딩 중 이탈) → 차감된 횟수 그대로 유지
+    }
+
     const raw = localStorage.getItem(DEMO_USAGE_KEY);
     if (!raw) {
       localStorage.setItem(
@@ -805,7 +836,7 @@ const DEV_VIEW_OPTIONS: { view: PanelView; label: string }[] = [
   { view: 'input', label: '작성 화면' },
   { view: 'loading', label: '로딩 화면' },
   { view: 'success', label: '생성 완료' },
-  { view: 'error', label: '다시 시도' },
+  { view: 'error', label: '생성 실패' },
 ];
 
 const DevViewToolbar = ({
@@ -820,70 +851,84 @@ const DevViewToolbar = ({
   onResetUsage: () => void;
   onDrainUsage: () => void;
   onShowExhaustedPopup: () => void;
-}) => (
-  <div className="fixed bottom-30 right-6 z-9999 flex flex-col gap-1.5 bg-background-surface border border-border-default rounded-xl shadow-lg p-3 w-36">
-    <div className="flex items-center justify-between mb-0.5">
-      <p className="text-2xs font-bold tracking-wide text-text-tertiary uppercase">
-        🛠 미리보기
-      </p>
+}) => {
+  const { signIn } = useGoogleAuth();
+
+  return (
+    <div className="fixed bottom-30 right-6 z-9999 flex flex-col gap-1.5 bg-background-surface border border-border-default rounded-xl shadow-lg p-3 w-36">
+      <div className="flex items-center justify-between mb-0.5">
+        <p className="text-2xs font-bold tracking-wide text-text-tertiary uppercase">
+          🛠 미리보기
+        </p>
+        {current !== undefined && (
+          <button
+            type="button"
+            onClick={() => onChange(undefined)}
+            className="text-2xs font-semibold text-text-danger hover:opacity-70 transition-opacity"
+          >
+            ✕ 해제
+          </button>
+        )}
+      </div>
       {current !== undefined && (
-        <button
-          type="button"
-          onClick={() => onChange(undefined)}
-          className="text-2xs font-semibold text-text-danger hover:opacity-70 transition-opacity"
-        >
-          ✕ 해제
-        </button>
+        <p className="text-2xs text-text-warning leading-3.5 mb-0.5">
+          실제 흐름 일시정지됨!!!
+        </p>
       )}
-    </div>
-    {current !== undefined && (
-      <p className="text-2xs text-text-warning leading-3.5 mb-0.5">
-        실제 흐름 일시정지됨!!!
-      </p>
-    )}
-    {DEV_VIEW_OPTIONS.map(({ view, label }) => (
+      {DEV_VIEW_OPTIONS.map(({ view, label }) => (
+        <button
+          key={view}
+          type="button"
+          onClick={() => onChange(current === view ? undefined : view)}
+          className={`text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors ${
+            current === view
+              ? 'bg-background-brand text-text-inverse'
+              : 'bg-background-subtle text-text-primary hover:bg-background-muted'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+      {/* 구분선 */}
+      <div className="border-t border-border-subtle my-0.5" />
+      {/* 횟수 제어 */}
       <button
-        key={view}
         type="button"
-        onClick={() => onChange(current === view ? undefined : view)}
-        className={`text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors ${
-          current === view
-            ? 'bg-background-brand text-text-inverse'
-            : 'bg-background-subtle text-text-primary hover:bg-background-muted'
-        }`}
+        onClick={onResetUsage}
+        className="text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors bg-background-subtle text-text-primary hover:bg-background-muted"
       >
-        {label}
+        무료체험 리셋
       </button>
-    ))}
-    {/* 구분선 */}
-    <div className="border-t border-border-subtle my-0.5" />
-    {/* 횟수 제어 */}
-    <button
-      type="button"
-      onClick={onResetUsage}
-      className="text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors bg-background-subtle text-text-primary hover:bg-background-muted"
-    >
-      무료체험 리셋
-    </button>
-    <button
-      type="button"
-      onClick={onDrainUsage}
-      className="text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors bg-background-subtle text-text-danger hover:bg-background-danger-subtle"
-    >
-      무료체험 제거
-    </button>
-    {/* 구분선 */}
-    <div className="border-t border-border-subtle my-0.5" />
-    {/* 팝업 미리보기 */}
-    <button
-      type="button"
-      onClick={onShowExhaustedPopup}
-      className="text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors bg-background-subtle text-text-primary hover:bg-background-muted"
-    >
-      소진시 팝업
-    </button>
-  </div>
-);
+      <button
+        type="button"
+        onClick={onDrainUsage}
+        className="text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors bg-background-subtle text-text-danger hover:bg-background-danger-subtle"
+      >
+        무료체험 제거
+      </button>
+      {/* 구분선 */}
+      <div className="border-t border-border-subtle my-0.5" />
+      {/* 팝업 미리보기 */}
+      <button
+        type="button"
+        onClick={onShowExhaustedPopup}
+        className="text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors bg-background-subtle text-text-primary hover:bg-background-muted"
+      >
+        소진시 팝업
+      </button>
+      {/* 구분선 */}
+      <div className="border-t border-border-subtle my-0.5" />
+      {/* Google 로그인 */}
+      <button
+        type="button"
+        onClick={signIn}
+        className="text-xs font-medium px-3 py-1.5 rounded-lg text-left transition-colors bg-background-subtle text-text-primary hover:bg-background-muted"
+      >
+        🔑 Google 로그인
+      </button>
+    </div>
+  );
+};
 
 // ─── 메일 섹션 ────────────────────────────────────────────────────
 
@@ -902,18 +947,32 @@ const MailSection = () => {
   );
   /** 이메일 생성 진행 중 여부 — GmailMockup 스켈레톤 애니메이션 트리거 */
   const [isGenerating, setIsGenerating] = useState(false);
+  /**
+   * 재시도 모드 여부
+   * true  → 이전 시도가 실패한 상태 — 다음 요청 시 횟수 차감 없음
+   * false → 최초 시도 — 요청 시 횟수 차감
+   */
+  const [isRetryMode, setIsRetryMode] = useState(false);
+  /** 현재 시도 직전의 횟수 (실패 후 새로고침 시 복구 기준값) */
+  const countBeforeAttemptRef = useRef<number | null>(null);
 
   /** [DEV ONLY] localStorage 사용 횟수 초기화 (DEMO_DAILY_LIMIT으로 복구) */
   const handleResetUsage = () => {
+    localStorage.removeItem(DEMO_ATTEMPT_KEY);
     saveDemoRemaining(DEMO_DAILY_LIMIT);
     setRemainingCount(DEMO_DAILY_LIMIT);
+    setIsRetryMode(false);
+    countBeforeAttemptRef.current = null;
     setShowExhaustedPopup(false);
   };
 
   /** [DEV ONLY] localStorage 사용 횟수를 0으로 차감 */
   const handleDrainUsage = () => {
+    localStorage.removeItem(DEMO_ATTEMPT_KEY);
     saveDemoRemaining(0);
     setRemainingCount(0);
+    setIsRetryMode(false);
+    countBeforeAttemptRef.current = null;
     setShowExhaustedPopup(false);
   };
 
@@ -923,18 +982,41 @@ const MailSection = () => {
   /**
    * 이메일 생성 요청 — POST /generations
    *
-   * 무료 체험 횟수는 FE/localStorage에서만 관리 (BE 제한 없음).
-   * 성공 시: generated_subject, generated_email을 GmailMockup에 표시
-   * 실패 시: ToneFitPanel이 error 뷰로 전환 (오류 처리는 패널 내부)
+   * 횟수 차감 정책:
+   * - 최초 시도: 즉시 차감 + localStorage에 pending 플래그 저장
+   *   → 로딩 중 새로고침해도 차감 유지
+   * - 실패: failed 플래그 저장 → 새로고침 시 차감 복구
+   * - 재시도: 추가 차감 없이 pending 플래그로만 갱신
+   * - 성공: 플래그 제거 (차감 확정)
    */
   const handleRequest = async (
     params: GenerateParams
   ): Promise<GenerateResult> => {
     setIsGenerating(true);
     try {
-      const newCount = remainingCount - 1;
-      setRemainingCount(newCount);
-      saveDemoRemaining(newCount);
+      if (!isRetryMode) {
+        // 최초 시도: 횟수 차감 + pending 플래그
+        const newCount = remainingCount - 1;
+        countBeforeAttemptRef.current = remainingCount;
+        setRemainingCount(newCount);
+        saveDemoRemaining(newCount);
+        localStorage.setItem(
+          DEMO_ATTEMPT_KEY,
+          JSON.stringify({
+            countBefore: remainingCount,
+            status: 'pending',
+          } satisfies DemoAttemptState)
+        );
+      } else {
+        // 재시도: 차감 없이 pending 플래그만 갱신
+        localStorage.setItem(
+          DEMO_ATTEMPT_KEY,
+          JSON.stringify({
+            countBefore: countBeforeAttemptRef.current!,
+            status: 'pending',
+          } satisfies DemoAttemptState)
+        );
+      }
 
       const reqBody = {
         receiver_type: params.receiver,
@@ -946,14 +1028,27 @@ const MailSection = () => {
       const response = await postGeneration(reqBody);
       devLog('[Generation] ◀ 응답', response);
 
+      // 성공: 플래그 제거, 재시도 모드 해제
+      localStorage.removeItem(DEMO_ATTEMPT_KEY);
+      setIsRetryMode(false);
+      countBeforeAttemptRef.current = null;
+
       const result = {
         subject: response.generated_subject,
         content: response.generated_email,
       };
       devLog('[Generation] 매핑 결과', result);
-
       return result;
     } catch (err) {
+      // 실패: failed 플래그 저장 → 새로고침 시 복구
+      localStorage.setItem(
+        DEMO_ATTEMPT_KEY,
+        JSON.stringify({
+          countBefore: countBeforeAttemptRef.current!,
+          status: 'failed',
+        } satisfies DemoAttemptState)
+      );
+      setIsRetryMode(true);
       devError('[Generation] 오류', err);
       throw err;
     } finally {
@@ -1014,6 +1109,10 @@ const MailSection = () => {
               onReset={() => {
                 setSubject('');
                 setContent('');
+                // 새 이메일 작성 → 재시도 모드 해제
+                setIsRetryMode(false);
+                countBeforeAttemptRef.current = null;
+                localStorage.removeItem(DEMO_ATTEMPT_KEY);
               }}
               onExhausted={() => setShowExhaustedPopup(true)}
               devForceView={devForceView}

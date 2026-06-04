@@ -260,7 +260,8 @@ const PanelLoadingBody = ({
 };
 
 /** 생성 성공 화면 */
-const PanelSuccessBody = ({ onReset }: { onReset: () => void }) => (
+// const PanelSuccessBody = ({ onReset }: { onReset: () => void }) => (
+const PanelSuccessBody = () => (
   <div className="flex-1 flex flex-col items-center justify-between px-4 py-5">
     <div className="flex-1 flex flex-col items-center justify-center py-12">
       <div className="flex flex-col gap-5 items-center">
@@ -299,9 +300,9 @@ const PanelSuccessBody = ({ onReset }: { onReset: () => void }) => (
       >
         ToneFit 시작하기
       </ButtonLongV2>
-      <ButtonLongV2 variant="secondary" onClick={onReset}>
+      {/* <ButtonLongV2 variant="secondary" onClick={onReset}>
         새 이메일 작성하기
-      </ButtonLongV2>
+      </ButtonLongV2> */}
     </div>
   </div>
 );
@@ -315,7 +316,7 @@ const PanelErrorBody = ({ onRetry }: { onRetry: () => void }) => (
       </div>
       <div className="flex flex-col gap-5 items-center text-center w-full">
         <p className="text-xl-plus font-semibold leading-7.5 tracking-tight text-text-primary">
-          교정을 완료하지 못했어요
+          이메일 생성을 완료하지 못했어요
         </p>
         <p className="text-base font-normal leading-6 tracking-tight text-text-primary text-center">
           잠시 후 다시 시도해 주세요.
@@ -436,7 +437,7 @@ const ToneFitPanel = ({
   remainingCount,
   onRequest,
   onSuccess,
-  onReset,
+  // onReset,
   onExhausted,
   devForceView,
 }: ToneFitPanelProps) => {
@@ -486,13 +487,13 @@ const ToneFitPanel = ({
   ]);
 
   /** 성공 화면 → 입력 초기화 */
-  const handleReset = () => {
-    setView('input');
-    setReceiver(null);
-    setPurpose(null);
-    setEmailText('');
-    onReset();
-  };
+  // const handleReset = () => {
+  //   setView('input');
+  //   setReceiver(null);
+  //   setPurpose(null);
+  //   setEmailText('');
+  //   onReset();
+  // };
 
   /** 실패 화면 → 입력 유지하고 돌아가기 */
   const handleRetry = () => setView('input');
@@ -547,7 +548,8 @@ const ToneFitPanel = ({
           purposeLabel={purposeLabel}
         />
       )}
-      {activeView === 'success' && <PanelSuccessBody onReset={handleReset} />}
+      {/* {activeView === 'success' && <PanelSuccessBody onReset={handleReset} />} */}
+      {activeView === 'success' && <PanelSuccessBody />}
       {activeView === 'error' && <PanelErrorBody onRetry={handleRetry} />}
       {activeView === 'input' && (
         <PanelBody
