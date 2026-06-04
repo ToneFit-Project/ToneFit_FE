@@ -39,7 +39,7 @@ export const ROUTES = {
   PRICING: '/home/pricing', // 요금제/결제
 
   // 데모 (크롬 익스텐션 웹 데모 버전)
-  DEMO: '/demo',
+  DEMO: '/',
 } as const;
 
 // =============================================================

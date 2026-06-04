@@ -181,7 +181,7 @@ const DemoHeader = () => {
       <div className="header__inner flex items-center justify-between">
         {/* 로고 + 네비 */}
         <div className="header__left flex items-center gap-14">
-          <a href="/demo" className="header__logo flex items-center gap-5">
+          <a href="/" className="header__logo flex items-center gap-5">
             <img
               src={imgLogo}
               alt="ToneFit 아이콘"
@@ -747,12 +747,7 @@ const GmailMockup = ({
 
 /** 무료 체험 횟수를 모두 소진했을 때 표시되는 모달 팝업 */
 const ExhaustedPopup = ({ onClose }: { onClose: () => void }) => (
-  <div
-    className="fixed inset-0 z-9999 flex items-center justify-center bg-[rgba(0,0,0,0.54)]"
-    onClick={(e) => {
-      if (e.target === e.currentTarget) onClose();
-    }}
-  >
+  <div className="fixed inset-0 z-9999 flex items-center justify-center bg-[rgba(0,0,0,0.54)]">
     <div className="relative bg-background-surface rounded-2xl pt-6 pb-2.5 px-5 w-[552px] gap-8 flex flex-col items-center">
       {/* 닫기 버튼 */}
       <button
@@ -815,13 +810,14 @@ const ExhaustedPopup = ({ onClose }: { onClose: () => void }) => (
       {/* CTA */}
       <div className="w-full p-2.5 mt-3.5">
         <ButtonLongV2
-          onClick={() =>
+          onClick={() => {
             window.open(
               'https://chromewebstore.google.com/category/extensions',
               '_blank',
               'noopener,noreferrer'
-            )
-          }
+            );
+            onClose();
+          }}
         >
           ToneFit 시작하기
         </ButtonLongV2>
@@ -941,10 +937,15 @@ const MailSection = () => {
   const [devForceView, setDevForceView] = useState<PanelView | undefined>(
     undefined
   );
-  // 진입 시 잔여 횟수가 0이면 소진 팝업 즉시 표시
-  const [showExhaustedPopup, setShowExhaustedPopup] = useState(
-    () => getDemoRemaining() === 0
-  );
+  const [showExhaustedPopup, setShowExhaustedPopup] = useState(false);
+
+  // 소진 팝업 노출 시 페이지 스크롤 방지
+  useEffect(() => {
+    document.body.style.overflow = showExhaustedPopup ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showExhaustedPopup]);
   /** 이메일 생성 진행 중 여부 — GmailMockup 스켈레톤 애니메이션 트리거 */
   const [isGenerating, setIsGenerating] = useState(false);
   /**

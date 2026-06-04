@@ -78,12 +78,6 @@ const App = () => {
 
   return (
     <Routes>
-      {/* 루트 경로: 데모 페이지로 리다이렉트 */}
-      <Route
-        path={ROUTES.HOME}
-        element={<Navigate to={ROUTES.DEMO} replace />}
-      />
-
       {/* ── 약관 동의 라우트 (Google OAuth 흐름에서 자동 진입) ── */}
       {/* AuthLayout은 디자인 확정 후 적용 예정 */}
       <Route path={ROUTES.JOIN_ACCEPT} element={<JoinAcceptPage />} />
