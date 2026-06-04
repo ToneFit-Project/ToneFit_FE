@@ -4,7 +4,7 @@
  * API 명세 v0.53 기준
  *
  * 토큰 정책:
- * - access_token  → sessionStorage (탭 닫으면 자동 만료)
+ * - access_token  → localStorage (브라우저 재시작 후에도 유지)
  * - refresh_token → HttpOnly + Secure Cookie (브라우저 자동 송수신)
  *   → FE에서 직접 다루지 않음. `credentials: 'include'`로 자동 처리.
  */
@@ -14,9 +14,6 @@ import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { STORAGE_KEYS } from '@/constants';
 import { devLog, devError } from '@/utils/devLog';
 import type {
-  // Anonymous
-  AnonymousSession,
-  AnonymousTokenResponse,
   // Auth
   GoogleAuthRequest,
   GoogleAuthResponse,
@@ -74,7 +71,7 @@ const VISIT_SESSION_ID = crypto.randomUUID();
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const accessToken = sessionStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
@@ -117,7 +114,7 @@ const processQueue = (error: unknown, token: string | null = null): void => {
 
 /** access_token 삭제 (refresh_token은 쿠키 — BE 로그아웃 시 만료됨) */
 const clearAccessToken = (): void => {
-  sessionStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+  localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
 };
 
 apiClient.interceptors.response.use(
@@ -159,7 +156,9 @@ apiClient.interceptors.response.use(
     }
 
     // 401 Unauthorized — refresh_token(cookie)으로 갱신 시도
-    if (status === 401 && !originalRequest._retry) {
+    // /auth/refresh 자체가 401이면 인터셉터에서 처리하지 않음 (App.tsx catch로 전달)
+    const isRefreshEndpoint = originalRequest?.url?.includes('/auth/refresh');
+    if (status === 401 && !originalRequest._retry && !isRefreshEndpoint) {
       if (isRefreshing) {
         return new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -179,7 +178,7 @@ apiClient.interceptors.response.use(
         const response = await apiClient.post<RefreshResponse>('/auth/refresh');
         const { access_token } = response.data;
 
-        sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
+        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
         apiClient.defaults.headers.common['Authorization'] =
           `Bearer ${access_token}`;
 
@@ -212,47 +211,10 @@ apiClient.interceptors.response.use(
   }
 );
 
-// =============================================================
-// 0. 익명 세션 (Anonymous Session)
-// =============================================================
-
-/**
- * 익명 토큰 발급 — 앱 최초 진입 시 호출
- *
- * - access_token    → sessionStorage
- * - anonymous_token → localStorage (재식별용)
- * - refresh_token   → Set-Cookie (HttpOnly, FE 미관리)
- *
- * localStorage에 기존 anonymous_token이 있으면 함께 전송해
- * BE가 이전 익명 유저로 재연결할 수 있도록 합니다.
- */
-export const issueAnonymousToken = async (): Promise<AnonymousSession> => {
-  const existingAnonToken = localStorage.getItem(STORAGE_KEYS.ANONYMOUS_TOKEN);
-
-  const response = await apiClient.post<AnonymousTokenResponse>(
-    '/auth/anonymous',
-    existingAnonToken ? { anonymous_token: existingAnonToken } : undefined
-  );
-
-  const { user_id, is_guest, plan, anonymous_token, access_token } =
-    response.data;
-
-  sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
-  localStorage.setItem(STORAGE_KEYS.ANONYMOUS_TOKEN, anonymous_token);
-
-  return {
-    userId: user_id,
-    isGuest: is_guest,
-    plan,
-    anonymousToken: anonymous_token,
-    accessToken: access_token,
-  };
-};
-
 /**
  * Google OAuth 로그인 / 신규 가입 / 게스트 전환
  *
- * 성공 후 access_token을 sessionStorage에 저장.
+ * 성공 후 access_token을 localStorage에 저장.
  * refresh_token은 Set-Cookie로 자동 관리됨.
  */
 export const googleAuth = async (
@@ -264,7 +226,7 @@ export const googleAuth = async (
   );
   const { access_token } = response.data;
 
-  sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
+  localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
   apiClient.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
   return response.data;

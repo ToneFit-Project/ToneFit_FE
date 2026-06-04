@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROUTES, STORAGE_KEYS } from '@/constants';
-import apiClient, { issueAnonymousToken } from '@/api';
+import apiClient from '@/api';
 // ─────────────────────────────────────────────────────────────────
 // import 페이지
 // home - 공용레이아웃, 교정시작, 교정로딩, 교정비교, 교정완료(로딩), 교정결과
@@ -51,37 +51,25 @@ const App = () => {
 
   useEffect(() => {
     // 이미 유효한 access_token이 있으면 불필요
-    const existingToken = sessionStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    const existingToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     if (existingToken) return;
 
     // StrictMode에서 effect가 두 번 실행되는 것 방지
     if (issuedRef.current) return;
     issuedRef.current = true;
 
+    // refresh_token 쿠키로 access_token 재발급 시도 (로그인된 Extension 사용자)
+    // 실패 시 그냥 진행 — 웹 데모는 인증 없이 POST /generations 직접 호출
     const initSession = async () => {
-      // 1순위: refresh_token 쿠키로 access_token 재발급 시도
-      //   - 탭을 닫았다 재방문해도 쿠키가 살아있으면 (익명 7일 / 정식 30일)
-      //     기존 세션을 그대로 복구할 수 있음
       try {
         const { data } = await apiClient.post<{ access_token: string }>(
           '/auth/refresh'
         );
-        sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token);
+        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token);
         apiClient.defaults.headers.common['Authorization'] =
           `Bearer ${data.access_token}`;
-        return;
       } catch {
-        // refresh_token 만료 또는 없음 → 2순위로 진행
-      }
-
-      // 2순위: 익명 토큰 신규 발급
-      //   - localStorage의 anonymous_token이 있으면 함께 전송해
-      //     BE가 이전 익명 유저로 재연결 (데이터 연속성 유지)
-      try {
-        await issueAnonymousToken();
-      } catch (error) {
-        console.error('[App] 세션 초기화 실패:', error);
-        issuedRef.current = false; // 재시도 허용
+        // refresh_token 없음 (미로그인 / 데모 사용자) → 인증 없이 진행
       }
     };
 
@@ -90,12 +78,6 @@ const App = () => {
 
   return (
     <Routes>
-      {/* 루트 경로: 데모 페이지로 리다이렉트 */}
-      <Route
-        path={ROUTES.HOME}
-        element={<Navigate to={ROUTES.DEMO} replace />}
-      />
-
       {/* ── 약관 동의 라우트 (Google OAuth 흐름에서 자동 진입) ── */}
       {/* AuthLayout은 디자인 확정 후 적용 예정 */}
       <Route path={ROUTES.JOIN_ACCEPT} element={<JoinAcceptPage />} />

@@ -39,7 +39,7 @@ export const ROUTES = {
   PRICING: '/home/pricing', // 요금제/결제
 
   // 데모 (크롬 익스텐션 웹 데모 버전)
-  DEMO: '/demo',
+  DEMO: '/',
 } as const;
 
 // =============================================================
@@ -167,15 +167,9 @@ export const VALIDATION_MESSAGES = {
 export const STORAGE_KEYS = {
   /**
    * 접근 토큰 (익명 + 정식 회원 공용)
-   * 저장 위치: sessionStorage — 탭/브라우저 닫으면 자동 만료
+   * 저장 위치: localStorage — 브라우저 재시작 후에도 유지
    */
   ACCESS_TOKEN: 'tf_access_token',
-  /**
-   * 익명 사용자 토큰 (anonymous_token)
-   * 저장 위치: localStorage — 익명 세션 재식별용, 브라우저 재시작 후에도 유지
-   * refresh_token은 HttpOnly Cookie로 자동 관리 — FE에서 직접 다루지 않음
-   */
-  ANONYMOUS_TOKEN: 'tf_anon_token',
   /**
    * 암호화된 이메일 초안
    * 저장 위치: localStorage — AES-GCM 암호문 (base64)

@@ -97,7 +97,7 @@ const useTokenExchange = (): UseTokenExchangeReturn => {
 
       try {
         // 토큰 교체: sessionStorage + Axios 헤더 갱신
-        sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
         apiClient.defaults.headers.common['Authorization'] =
           `Bearer ${accessToken}`;
       } catch (error) {
