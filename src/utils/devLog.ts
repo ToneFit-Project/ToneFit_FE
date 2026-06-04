@@ -6,7 +6,7 @@
  *
  * 확인 후 반드시 false로 되돌려 주세요.
  */
-export const DEV_LOG = true;
+export const DEV_LOG = false;
 
 type LogArgs = Parameters<typeof console.log>;
 
