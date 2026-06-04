@@ -167,7 +167,7 @@ export const VALIDATION_MESSAGES = {
 export const STORAGE_KEYS = {
   /**
    * 접근 토큰 (익명 + 정식 회원 공용)
-   * 저장 위치: sessionStorage — 탭/브라우저 닫으면 자동 만료
+   * 저장 위치: localStorage — 브라우저 재시작 후에도 유지
    */
   ACCESS_TOKEN: 'tf_access_token',
   /**

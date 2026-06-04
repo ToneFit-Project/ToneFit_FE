@@ -51,7 +51,7 @@ const App = () => {
 
   useEffect(() => {
     // 이미 유효한 access_token이 있으면 불필요
-    const existingToken = sessionStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    const existingToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
     if (existingToken) return;
 
     // StrictMode에서 effect가 두 번 실행되는 것 방지
@@ -66,7 +66,7 @@ const App = () => {
         const { data } = await apiClient.post<{ access_token: string }>(
           '/auth/refresh'
         );
-        sessionStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token);
+        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token);
         apiClient.defaults.headers.common['Authorization'] =
           `Bearer ${data.access_token}`;
         return;
