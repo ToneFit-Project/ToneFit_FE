@@ -1036,7 +1036,8 @@ const MailSection = () => {
 
       const result = {
         subject: response.generated_subject,
-        content: response.generated_email,
+        // 서버가 리터럴 \n 문자열로 줄바꿈을 내려줄 경우 실제 개행 문자로 변환
+        content: response.generated_email.replace(/\\n/g, '\n'),
       };
       devLog('[Generation] 매핑 결과', result);
       return result;
