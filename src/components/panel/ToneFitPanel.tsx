@@ -119,6 +119,11 @@ export interface ToneFitPanelProps {
    * 부모가 "횟수 소진" 팝업 등 후속 처리를 담당
    */
   onExhausted?: () => void;
+  /**
+   * 패널 헤더(로고 + 잔여 횟수 뱃지) 표시 여부
+   * 데모: true (기본값) / 익스텐션 사이드 패널: false
+   */
+  showHeader?: boolean;
   /** [DEV ONLY] 패널 뷰 강제 지정. undefined면 내부 상태 사용 */
   devForceView?: PanelView;
 }
@@ -214,7 +219,7 @@ const PanelLoadingBody = ({
   ];
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-8 px-4 py-5">
+    <div className="flex-1 flex flex-col items-center justify-center gap-8 px-4 py-5 ">
       {/* 스피너 */}
       <div className="relative size-40 shrink-0">
         {/* AI 연필 쓰기 애니메이션 (Figma node 3188-2121) */}
@@ -355,7 +360,7 @@ const PanelBody = ({
     'text-base font-semibold leading-6 tracking-tight text-text-primary';
 
   return (
-    <div className="flex-1 flex flex-col px-4 py-5 gap-5">
+    <div className="flex-1 flex flex-col px-4 py-5 gap-5 justify-between">
       <div className="flex flex-col gap-8">
         {/* 수신자 유형 */}
         <div className="flex flex-col gap-4">
@@ -430,6 +435,33 @@ const PanelBody = ({
 };
 
 // =============================================================
+// 패널 헤더 (독립 컴포넌트)
+// =============================================================
+
+/**
+ * 패널 헤더 — 로고 + 잔여 횟수 뱃지
+ *
+ * 데모 페이지에서는 표시 / 익스텐션 사이드 패널에서는 숨김
+ * ToneFitPanel의 showHeader prop으로 제어하거나, 독립적으로 사용 가능
+ */
+export const PanelHeader = ({ remainingCount }: { remainingCount: number }) => (
+  <div className="flex items-center justify-between px-4 py-5 shrink-0">
+    <div className="flex items-center gap-2.5">
+      <img src={imgPanelIcon} alt="ToneFit" className="size-8 object-contain" />
+      <span className="text-lg font-semibold leading-[26px] tracking-tight text-text-primary">
+        이메일 생성
+      </span>
+    </div>
+    <button
+      type="button"
+      className="w-27 h-7 bg-background-selected border border-border-brand rounded-full text-xs font-semibold leading-4 tracking-tight text-text-brand"
+    >
+      {remainingCount}회 무료체험 가능
+    </button>
+  </div>
+);
+
+// =============================================================
 // 메인 컴포넌트
 // =============================================================
 
@@ -439,6 +471,7 @@ const ToneFitPanel = ({
   onSuccess,
   // onReset,
   onExhausted,
+  showHeader = true,
   devForceView,
 }: ToneFitPanelProps) => {
   const [receiver, setReceiver] = useState<ReceiverType | null>(null);
@@ -520,26 +553,9 @@ const ToneFitPanel = ({
     PURPOSE_OPTIONS.find((o) => o.value === purpose)?.label ?? '보고';
 
   return (
-    <div className="bg-background-surface rounded-xl shadow-[0px_2px_4px_rgba(0,0,0,0.08)] flex flex-col w-[437px] shrink-0">
-      {/* 패널 헤더 */}
-      <div className="flex items-center justify-between px-4 py-5 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <img
-            src={imgPanelIcon}
-            alt="ToneFit"
-            className="size-8 object-contain"
-          />
-          <span className="text-lg font-semibold leading-[26px] tracking-tight text-text-primary">
-            이메일 생성
-          </span>
-        </div>
-        <button
-          type="button"
-          className="w-27 h-7 bg-background-selected border border-border-brand rounded-full text-xs font-semibold leading-4 tracking-tight text-text-brand"
-        >
-          {remainingCount}회 무료체험 가능
-        </button>
-      </div>
+    <>
+      {/* 패널 헤더 — 데모: 표시 / 익스텐션: 숨김 */}
+      {showHeader && <PanelHeader remainingCount={remainingCount} />}
 
       {/* 본문 */}
       {activeView === 'loading' && (
@@ -563,7 +579,7 @@ const ToneFitPanel = ({
           onGenerate={handleGenerate}
         />
       )}
-    </div>
+    </>
   );
 };
 

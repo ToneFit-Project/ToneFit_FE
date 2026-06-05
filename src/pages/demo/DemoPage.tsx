@@ -1101,24 +1101,26 @@ const MailSection = () => {
               onContentChange={setContent}
               isLoading={isGenerating || devForceView === 'loading'}
             />
-            <ToneFitPanel
-              remainingCount={remainingCount}
-              onRequest={handleRequest}
-              onSuccess={(s, c) => {
-                setSubject(s);
-                setContent(c);
-              }}
-              onReset={() => {
-                setSubject('');
-                setContent('');
-                // 새 이메일 작성 → 재시도 모드 해제
-                setIsRetryMode(false);
-                countBeforeAttemptRef.current = null;
-                localStorage.removeItem(DEMO_ATTEMPT_KEY);
-              }}
-              onExhausted={() => setShowExhaustedPopup(true)}
-              devForceView={devForceView}
-            />
+            <div className="bg-background-surface rounded-xl shadow-[0px_2px_4px_rgba(0,0,0,0.08)] flex flex-col w-full max-w-[437px] shrink-0">
+              <ToneFitPanel
+                remainingCount={remainingCount}
+                onRequest={handleRequest}
+                onSuccess={(s, c) => {
+                  setSubject(s);
+                  setContent(c);
+                }}
+                onReset={() => {
+                  setSubject('');
+                  setContent('');
+                  // 새 이메일 작성 → 재시도 모드 해제
+                  setIsRetryMode(false);
+                  countBeforeAttemptRef.current = null;
+                  localStorage.removeItem(DEMO_ATTEMPT_KEY);
+                }}
+                onExhausted={() => setShowExhaustedPopup(true)}
+                devForceView={devForceView}
+              />
+            </div>
           </div>
         </div>
       </section>
