@@ -26,7 +26,8 @@
  * />
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { ChipV2, ButtonLongV2 } from '@/components/ui';
 import type { ReceiverType, PurposeType } from '@/types';
 import imgPanelIcon from '@/assets/mail-logo.svg';
@@ -119,6 +120,37 @@ export interface ToneFitPanelProps {
    * 부모가 "횟수 소진" 팝업 등 후속 처리를 담당
    */
   onExhausted?: () => void;
+  /**
+   * 패널 헤더(로고 + 잔여 횟수 뱃지) 표시 여부
+   * 데모: true (기본값) / 익스텐션 사이드 패널: false
+   */
+  showHeader?: boolean;
+  /**
+   * 사용 모드
+   * 'demo': 생성 완료 후 "ToneFit 시작하기" 버튼 (기본값)
+   * 'extension': 생성 완료 후 "새 초안 만들기" 버튼
+   */
+  mode?: 'demo' | 'extension';
+  /** 입력 뷰 상단에 렌더할 슬롯 (툴팁 등 익스텐션 전용 UI) */
+  tooltipSlot?: ReactNode;
+  /** 수신자/목적 칩 선택 시 콜백 (툴팁 dismiss 등에 활용) */
+  onChipSelect?: () => void;
+  /** 로딩 중 취소 버튼 표시 여부 (익스텐션 전용) */
+  onCancel?: () => void;
+  /**
+   * onRequest가 reject될 때 호출 — 부모가 에러 종류를 판별해 errorVariant 상태를 업데이트할 때 사용
+   * cancelledRef.current === true인 경우(취소)에는 호출되지 않음
+   */
+  onError?: (err: unknown) => void;
+  /**
+   * 에러 화면 종류
+   * 'generic': 기본 (잠시 후 다시 시도)
+   * 'session_expired': 세션 만료 → 로그인 하기 버튼
+   * 'rate_limited': 레이트리밋 → 60초 카운트다운 후 다시 시도
+   */
+  errorVariant?: ErrorVariant;
+  /** 세션 만료 에러 화면의 "로그인 하기" 버튼 콜백 */
+  onGoToLogin?: () => void;
   /** [DEV ONLY] 패널 뷰 강제 지정. undefined면 내부 상태 사용 */
   devForceView?: PanelView;
 }
@@ -180,9 +212,11 @@ const PENCIL_TOP_PX = 48;
 const PanelLoadingBody = ({
   receiverLabel,
   purposeLabel,
+  onCancel,
 }: {
   receiverLabel: string;
   purposeLabel: string;
+  onCancel?: () => void;
 }) => {
   const [elapsed, setElapsed] = useState(0);
   const [stepIdx, setStepIdx] = useState(0);
@@ -214,55 +248,69 @@ const PanelLoadingBody = ({
   ];
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-8 px-4 py-5">
-      {/* 스피너 */}
-      <div className="relative size-40 shrink-0">
-        {/* AI 연필 쓰기 애니메이션 (Figma node 3188-2121) */}
-        <div className="absolute inset-0 z-10">
-          {/* 연필 아이콘 — 점이 추가될수록 좌측 이동 */}
-          <div
-            className="absolute size-16 overflow-hidden"
-            style={{
-              top: PENCIL_TOP_PX,
-              left: pencilLeft,
-              transition: isReset ? 'none' : 'left 0.25s ease-out',
-            }}
-          >
-            <img src={iconAiPencil} alt="" className="size-full" />
-          </div>
-
-          {/* 점 3개 — 순서대로 나타남 */}
-          {DOT_LEFT_PX.map((leftPos, i) => (
+    <div className="flex-1 flex flex-col items-center justify-between  px-4 py-5 h-full">
+      <div className="flex-1 flex flex-col items-center justify-center">
+        {/* 스피너 */}
+        <div className="relative size-40 shrink-0">
+          {/* AI 연필 쓰기 애니메이션 (Figma node 3188-2121) */}
+          <div className="absolute inset-0 z-10">
+            {/* 연필 아이콘 — 점이 추가될수록 좌측 이동 */}
             <div
-              key={i}
-              className={`absolute size-2 rounded-full transition-colors duration-300 ${
-                dotActive[i] ? 'bg-background-brand-100' : ''
-              }`}
-              style={{ top: DOT_TOP_PX, left: leftPos }}
-            />
-          ))}
+              className="absolute size-16 overflow-hidden"
+              style={{
+                top: PENCIL_TOP_PX,
+                left: pencilLeft,
+                transition: isReset ? 'none' : 'left 0.25s ease-out',
+              }}
+            >
+              <img src={iconAiPencil} alt="" className="size-full" />
+            </div>
+
+            {/* 점 3개 — 순서대로 나타남 */}
+            {DOT_LEFT_PX.map((leftPos, i) => (
+              <div
+                key={i}
+                className={`absolute size-2 rounded-full transition-colors duration-300 ${
+                  dotActive[i] ? 'bg-background-brand-100' : ''
+                }`}
+                style={{ top: DOT_TOP_PX, left: leftPos }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* 텍스트 */}
+        <div className="flex flex-col gap-2 items-center text-center w-80">
+          <h6 className="text-xl font-medium leading-7 tracking-tight text-text-primary">
+            {getLoadingMessage(elapsed, receiverLabel, purposeLabel)}
+          </h6>
+          <p className="text-sm font-normal leading-5.5 tracking-tight text-text-tertiary">
+            입력하신 내용을 바탕으로
+            <br />
+            자연스러운 톤의 이메일을 만드는 중입니다.
+          </p>
         </div>
       </div>
 
-      {/* 텍스트 */}
-      <div className="flex flex-col gap-2 items-center text-center w-80">
-        <h6 className="text-xl font-medium leading-7 tracking-tight text-text-primary">
-          {getLoadingMessage(elapsed, receiverLabel, purposeLabel)}
-        </h6>
-        <p className="text-sm font-normal leading-5.5 tracking-tight text-text-tertiary">
-          입력하신 내용을 바탕으로
-          <br />
-          자연스러운 톤의 이메일을 만드는 중입니다.
-        </p>
-      </div>
+      {/* 취소 버튼 — 익스텐션 전용 */}
+      {onCancel && (
+        <div className="w-full shrink-0">
+          <ButtonLongV2 onClick={onCancel}>중단하기</ButtonLongV2>
+        </div>
+      )}
     </div>
   );
 };
 
 /** 생성 성공 화면 */
-// const PanelSuccessBody = ({ onReset }: { onReset: () => void }) => (
-const PanelSuccessBody = () => (
-  <div className="flex-1 flex flex-col items-center justify-between px-4 py-5">
+const PanelSuccessBody = ({
+  mode = 'demo',
+  onReset,
+}: {
+  mode?: 'demo' | 'extension';
+  onReset: () => void;
+}) => (
+  <div className="flex-1 flex flex-col items-center justify-between px-4 py-5 h-full">
     <div className="flex-1 flex flex-col items-center justify-center py-12">
       <div className="flex flex-col gap-5 items-center">
         <div className="size-15 rounded-full bg-action-primary-default flex items-center justify-center shrink-0">
@@ -289,47 +337,122 @@ const PanelSuccessBody = () => (
       </div>
     </div>
     <div className="w-full shrink-0 flex flex-col gap-2">
-      <ButtonLongV2
-        onClick={() =>
-          window.open(
-            'https://chromewebstore.google.com/category/extensions',
-            '_blank',
-            'noopener,noreferrer'
-          )
-        }
-      >
-        ToneFit 시작하기
-      </ButtonLongV2>
-      {/* <ButtonLongV2 variant="secondary" onClick={onReset}>
-        새 이메일 작성하기
-      </ButtonLongV2> */}
+      {mode === 'demo' ? (
+        <ButtonLongV2
+          onClick={() =>
+            window.open(
+              'https://chromewebstore.google.com/category/extensions',
+              '_blank',
+              'noopener,noreferrer'
+            )
+          }
+        >
+          ToneFit 시작하기
+        </ButtonLongV2>
+      ) : (
+        <ButtonLongV2 onClick={onReset}>새 초안 만들기</ButtonLongV2>
+      )}
     </div>
   </div>
 );
 
+// =============================================================
+// 에러 variant 타입
+// =============================================================
+
+export type ErrorVariant = 'generic' | 'session_expired' | 'rate_limited';
+
+/** 에러 variant별 텍스트 설정 */
+const ERROR_CONFIG: Record<
+  ErrorVariant,
+  { title: string; descLine1: string; descLine2: string }
+> = {
+  generic: {
+    title: '이메일 생성을 완료하지 못했어요',
+    descLine1: '잠시 후 다시 시도해 주세요.',
+    descLine2: '입력하신 내용은 그대로 유지돼요.',
+  },
+  session_expired: {
+    title: '다시 로그인이 필요해요',
+    descLine1: '로그인이 만료되었어요.',
+    descLine2: '로그인 후 이어서 초안을 생성할 수 있습니다.',
+  },
+  rate_limited: {
+    title: '요청이 잠시 제한되었어요',
+    descLine1: '짧은 시간에 생성 요청이 많았어요.',
+    descLine2: '1분 후 다시 시도해 주세요.',
+  },
+};
+
 /** 생성 실패 화면 */
-const PanelErrorBody = ({ onRetry }: { onRetry: () => void }) => (
-  <div className="flex-1 flex flex-col items-center justify-between px-4 py-5">
-    <div className="flex-1 flex flex-col items-center justify-center gap-10 py-12">
-      <div className="size-22.5 rounded-full bg-background-brand-subtle flex items-center justify-center shrink-0">
-        <img src={iconExclamation} alt="" className="w-3.25 h-12.5" />
+const PanelErrorBody = ({
+  variant = 'generic',
+  onRetry,
+  onGoToLogin,
+}: {
+  variant?: ErrorVariant;
+  onRetry: () => void;
+  onGoToLogin?: () => void;
+}) => {
+  // rate_limited: 60초 카운트다운 → 0 도달 시 다시 시도 버튼 활성화
+  const [countdown, setCountdown] = useState(
+    variant === 'rate_limited' ? 60 : 0
+  );
+
+  useEffect(() => {
+    if (variant !== 'rate_limited') return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [variant]);
+
+  const { title, descLine1, descLine2 } = ERROR_CONFIG[variant];
+
+  // CTA 버튼 설정
+  const isCounting = variant === 'rate_limited' && countdown > 0;
+  const mm = String(Math.floor(countdown / 60)).padStart(2, '0');
+  const ss = String(countdown % 60).padStart(2, '0');
+  const buttonLabel =
+    variant === 'session_expired'
+      ? '로그인 하기'
+      : isCounting
+        ? `${mm}:${ss}`
+        : '다시 시도';
+  const handleAction =
+    variant === 'session_expired' ? (onGoToLogin ?? onRetry) : onRetry;
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-between px-4 py-5 h-full">
+      <div className="flex-1 flex flex-col items-center justify-center gap-10 py-12">
+        <div className="size-22.5 rounded-full bg-background-brand-subtle flex items-center justify-center shrink-0">
+          <img src={iconExclamation} alt="" className="w-3.25 h-12.5" />
+        </div>
+        <div className="flex flex-col gap-5 items-center text-center w-full">
+          <p className="text-xl-plus font-semibold leading-7.5 tracking-tight text-text-primary">
+            {title}
+          </p>
+          <p className="text-base font-normal leading-6 tracking-tight text-text-primary text-center">
+            {descLine1}
+            <br />
+            {descLine2}
+          </p>
+        </div>
       </div>
-      <div className="flex flex-col gap-5 items-center text-center w-full">
-        <p className="text-xl-plus font-semibold leading-7.5 tracking-tight text-text-primary">
-          이메일 생성을 완료하지 못했어요
-        </p>
-        <p className="text-base font-normal leading-6 tracking-tight text-text-primary text-center">
-          잠시 후 다시 시도해 주세요.
-          <br />
-          입력하신 내용은 그대로 유지돼요.
-        </p>
+      <div className="w-full shrink-0">
+        <ButtonLongV2 onClick={handleAction} disabled={isCounting}>
+          {buttonLabel}
+        </ButtonLongV2>
       </div>
     </div>
-    <div className="w-full shrink-0">
-      <ButtonLongV2 onClick={onRetry}>다시 시도</ButtonLongV2>
-    </div>
-  </div>
-);
+  );
+};
 
 /** 입력 폼 패널 본문 */
 const PanelBody = ({
@@ -341,6 +464,8 @@ const PanelBody = ({
   setEmailText,
   canGenerate,
   onGenerate,
+  tooltipSlot,
+  onChipSelect,
 }: {
   receiver: ReceiverType | null;
   setReceiver: (v: ReceiverType | null) => void;
@@ -350,13 +475,18 @@ const PanelBody = ({
   setEmailText: (v: string) => void;
   canGenerate: boolean;
   onGenerate: () => void;
+  tooltipSlot?: ReactNode;
+  onChipSelect?: () => void;
 }) => {
   const labelClass =
     'text-base font-semibold leading-6 tracking-tight text-text-primary';
 
   return (
-    <div className="flex-1 flex flex-col px-4 py-5 gap-5">
+    <div className="flex-1 flex flex-col px-4 py-5 gap-5 justify-between h-full">
       <div className="flex flex-col gap-8">
+        {/* 툴팁 슬롯 */}
+        {tooltipSlot}
+
         {/* 수신자 유형 */}
         <div className="flex flex-col gap-4">
           <p className={labelClass}>수신자 유형 선택</p>
@@ -365,7 +495,10 @@ const PanelBody = ({
               <ChipV2
                 key={value}
                 selected={receiver === value}
-                onClick={() => setReceiver(receiver === value ? null : value)}
+                onClick={() => {
+                  setReceiver(receiver === value ? null : value);
+                  onChipSelect?.();
+                }}
               >
                 {label}
               </ChipV2>
@@ -381,7 +514,10 @@ const PanelBody = ({
               <ChipV2
                 key={value}
                 selected={purpose === value}
-                onClick={() => setPurpose(purpose === value ? null : value)}
+                onClick={() => {
+                  setPurpose(purpose === value ? null : value);
+                  onChipSelect?.();
+                }}
               >
                 {label}
               </ChipV2>
@@ -430,6 +566,33 @@ const PanelBody = ({
 };
 
 // =============================================================
+// 패널 헤더 (독립 컴포넌트)
+// =============================================================
+
+/**
+ * 패널 헤더 — 로고 + 잔여 횟수 뱃지
+ *
+ * 데모 페이지에서는 표시 / 익스텐션 사이드 패널에서는 숨김
+ * ToneFitPanel의 showHeader prop으로 제어하거나, 독립적으로 사용 가능
+ */
+export const PanelHeader = ({ remainingCount }: { remainingCount: number }) => (
+  <div className="flex items-center justify-between px-4 py-5 shrink-0">
+    <div className="flex items-center gap-2.5">
+      <img src={imgPanelIcon} alt="ToneFit" className="size-8 object-contain" />
+      <span className="text-lg font-semibold leading-[26px] tracking-tight text-text-primary">
+        이메일 생성
+      </span>
+    </div>
+    <button
+      type="button"
+      className="w-27 h-7 bg-background-selected border border-border-brand rounded-full text-xs font-semibold leading-4 tracking-tight text-text-brand"
+    >
+      {remainingCount}회 무료체험 가능
+    </button>
+  </div>
+);
+
+// =============================================================
 // 메인 컴포넌트
 // =============================================================
 
@@ -437,14 +600,23 @@ const ToneFitPanel = ({
   remainingCount,
   onRequest,
   onSuccess,
-  // onReset,
+  onReset,
   onExhausted,
+  showHeader = true,
+  mode = 'demo',
+  tooltipSlot,
+  onChipSelect,
+  onCancel,
+  onError,
+  errorVariant = 'generic',
+  onGoToLogin,
   devForceView,
 }: ToneFitPanelProps) => {
   const [receiver, setReceiver] = useState<ReceiverType | null>(null);
   const [purpose, setPurpose] = useState<PurposeType | null>(null);
   const [emailText, setEmailText] = useState('');
   const [view, setView] = useState<PanelView>('input');
+  const cancelledRef = useRef(false);
 
   /**
    * 폼 입력 조건 (잔여 횟수 제외)
@@ -467,12 +639,16 @@ const ToneFitPanel = ({
       return;
     }
 
+    cancelledRef.current = false;
     setView('loading');
     try {
       const result = await onRequest({ receiver, purpose, emailText });
+      if (cancelledRef.current) return; // 취소된 경우 결과 무시
       setView('success');
       onSuccess(result.subject, result.content);
-    } catch {
+    } catch (err) {
+      if (cancelledRef.current) return; // 취소된 경우 에러 무시
+      onError?.(err);
       setView('error');
     }
   }, [
@@ -484,16 +660,24 @@ const ToneFitPanel = ({
     onRequest,
     onSuccess,
     onExhausted,
+    onError,
   ]);
 
+  /** 로딩 중 취소 → 입력값 유지하고 input으로 복귀 */
+  const handleCancel = useCallback(() => {
+    cancelledRef.current = true;
+    setView('input');
+    onCancel?.();
+  }, [onCancel]);
+
   /** 성공 화면 → 입력 초기화 */
-  // const handleReset = () => {
-  //   setView('input');
-  //   setReceiver(null);
-  //   setPurpose(null);
-  //   setEmailText('');
-  //   onReset();
-  // };
+  const handleReset = () => {
+    setView('input');
+    setReceiver(null);
+    setPurpose(null);
+    setEmailText('');
+    onReset();
+  };
 
   /** 실패 화면 → 입력 유지하고 돌아가기 */
   const handleRetry = () => setView('input');
@@ -520,37 +704,28 @@ const ToneFitPanel = ({
     PURPOSE_OPTIONS.find((o) => o.value === purpose)?.label ?? '보고';
 
   return (
-    <div className="bg-background-surface rounded-xl shadow-[0px_2px_4px_rgba(0,0,0,0.08)] flex flex-col w-[437px] shrink-0">
-      {/* 패널 헤더 */}
-      <div className="flex items-center justify-between px-4 py-5 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <img
-            src={imgPanelIcon}
-            alt="ToneFit"
-            className="size-8 object-contain"
-          />
-          <span className="text-lg font-semibold leading-[26px] tracking-tight text-text-primary">
-            이메일 생성
-          </span>
-        </div>
-        <button
-          type="button"
-          className="w-27 h-7 bg-background-selected border border-border-brand rounded-full text-xs font-semibold leading-4 tracking-tight text-text-brand"
-        >
-          {remainingCount}회 무료체험 가능
-        </button>
-      </div>
+    <>
+      {/* 패널 헤더 — 데모: 표시 / 익스텐션: 숨김 */}
+      {showHeader && <PanelHeader remainingCount={remainingCount} />}
 
       {/* 본문 */}
       {activeView === 'loading' && (
         <PanelLoadingBody
           receiverLabel={receiverLabel}
           purposeLabel={purposeLabel}
+          onCancel={onCancel ? handleCancel : undefined}
         />
       )}
-      {/* {activeView === 'success' && <PanelSuccessBody onReset={handleReset} />} */}
-      {activeView === 'success' && <PanelSuccessBody />}
-      {activeView === 'error' && <PanelErrorBody onRetry={handleRetry} />}
+      {activeView === 'success' && (
+        <PanelSuccessBody mode={mode} onReset={handleReset} />
+      )}
+      {activeView === 'error' && (
+        <PanelErrorBody
+          variant={errorVariant}
+          onRetry={handleRetry}
+          onGoToLogin={onGoToLogin}
+        />
+      )}
       {activeView === 'input' && (
         <PanelBody
           receiver={receiver}
@@ -561,9 +736,11 @@ const ToneFitPanel = ({
           setEmailText={setEmailText}
           canGenerate={canGenerateForm}
           onGenerate={handleGenerate}
+          tooltipSlot={tooltipSlot}
+          onChipSelect={onChipSelect}
         />
       )}
-    </div>
+    </>
   );
 };
 

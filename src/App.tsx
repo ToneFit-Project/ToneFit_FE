@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROUTES, STORAGE_KEYS } from '@/constants';
 import apiClient from '@/api';
@@ -18,6 +18,12 @@ import ComponentPage from '@/pages/dev/ComponentPage';
 // ─────────────────────────────────────────────────────────────────
 // 데모 페이지 (크롬 익스텐션 웹 데모)
 import DemoPage from '@/pages/demo/DemoPage';
+// ── 약관·정책 페이지 ──────────────────────────────────────────────
+import TermsPage from '@/pages/legal/TermsPage';
+import PrivacyPage from '@/pages/legal/PrivacyPage';
+import BehavioralDataPage from '@/pages/legal/BehavioralDataPage';
+import MarketingConsentPage from '@/pages/legal/MarketingConsentPage';
+import AiQualityConsentPage from '@/pages/legal/AiQualityConsentPage';
 // ─────────────────────────────────────────────────────────────────
 
 /**
@@ -46,34 +52,12 @@ import DemoPage from '@/pages/demo/DemoPage';
  * TODO: 로그인 여부에 따른 ProtectedRoute / GuestRoute 구현
  */
 const App = () => {
-  // StrictMode 이중 호출 방지용 플래그
-  const issuedRef = useRef(false);
-
   useEffect(() => {
-    // 이미 유효한 access_token이 있으면 불필요
-    const existingToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-    if (existingToken) return;
-
-    // StrictMode에서 effect가 두 번 실행되는 것 방지
-    if (issuedRef.current) return;
-    issuedRef.current = true;
-
-    // refresh_token 쿠키로 access_token 재발급 시도 (로그인된 Extension 사용자)
-    // 실패 시 그냥 진행 — 웹 데모는 인증 없이 POST /generations 직접 호출
-    const initSession = async () => {
-      try {
-        const { data } = await apiClient.post<{ access_token: string }>(
-          '/auth/refresh'
-        );
-        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, data.access_token);
-        apiClient.defaults.headers.common['Authorization'] =
-          `Bearer ${data.access_token}`;
-      } catch {
-        // refresh_token 없음 (미로그인 / 데모 사용자) → 인증 없이 진행
-      }
-    };
-
-    initSession();
+    // 저장된 access_token이 있으면 Axios 헤더에 주입 (Google OAuth 로그인 후 유지)
+    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+    if (token) {
+      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
   }, []);
 
   return (
@@ -139,6 +123,19 @@ const App = () => {
 
       {/* ── 데모 페이지 (크롬 익스텐션 웹 데모) ──────────────── */}
       <Route path={ROUTES.DEMO} element={<DemoPage />} />
+
+      {/* ── 약관·정책 페이지 ────────────────────────────────── */}
+      <Route path={ROUTES.TERMS} element={<TermsPage />} />
+      <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
+      <Route path={ROUTES.BEHAVIORAL_DATA} element={<BehavioralDataPage />} />
+      <Route
+        path={ROUTES.MARKETING_CONSENT}
+        element={<MarketingConsentPage />}
+      />
+      <Route
+        path={ROUTES.AI_QUALITY_CONSENT}
+        element={<AiQualityConsentPage />}
+      />
       {/* ────────────────────────────────────────────────────── */}
     </Routes>
   );
