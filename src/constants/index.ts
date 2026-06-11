@@ -40,6 +40,13 @@ export const ROUTES = {
 
   // 데모 (크롬 익스텐션 웹 데모 버전)
   DEMO: '/',
+
+  // 약관·정책 페이지
+  TERMS: '/terms',
+  PRIVACY: '/privacy',
+  BEHAVIORAL_DATA: '/behavioral-data',
+  MARKETING_CONSENT: '/marketing-consent',
+  AI_QUALITY_CONSENT: '/ai-quality-consent',
 } as const;
 
 // =============================================================

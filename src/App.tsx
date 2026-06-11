@@ -18,6 +18,12 @@ import ComponentPage from '@/pages/dev/ComponentPage';
 // ─────────────────────────────────────────────────────────────────
 // 데모 페이지 (크롬 익스텐션 웹 데모)
 import DemoPage from '@/pages/demo/DemoPage';
+// ── 약관·정책 페이지 ──────────────────────────────────────────────
+import TermsPage from '@/pages/legal/TermsPage';
+import PrivacyPage from '@/pages/legal/PrivacyPage';
+import BehavioralDataPage from '@/pages/legal/BehavioralDataPage';
+import MarketingConsentPage from '@/pages/legal/MarketingConsentPage';
+import AiQualityConsentPage from '@/pages/legal/AiQualityConsentPage';
 // ─────────────────────────────────────────────────────────────────
 
 /**
@@ -117,6 +123,19 @@ const App = () => {
 
       {/* ── 데모 페이지 (크롬 익스텐션 웹 데모) ──────────────── */}
       <Route path={ROUTES.DEMO} element={<DemoPage />} />
+
+      {/* ── 약관·정책 페이지 ────────────────────────────────── */}
+      <Route path={ROUTES.TERMS} element={<TermsPage />} />
+      <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
+      <Route path={ROUTES.BEHAVIORAL_DATA} element={<BehavioralDataPage />} />
+      <Route
+        path={ROUTES.MARKETING_CONSENT}
+        element={<MarketingConsentPage />}
+      />
+      <Route
+        path={ROUTES.AI_QUALITY_CONSENT}
+        element={<AiQualityConsentPage />}
+      />
       {/* ────────────────────────────────────────────────────── */}
     </Routes>
   );
