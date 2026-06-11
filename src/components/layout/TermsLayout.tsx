@@ -37,7 +37,7 @@ const TermsLayout = ({ title, description, children }: TermsLayoutProps) => {
       {/* 본문 */}
       <main className="flex-1 flex items-stretch justify-center px-5 py-13">
         <div
-          className="bg-background-surface border border-border-default rounded-3xl flex flex-col gap-9 w-full max-w-206 overflow-hidden p-8"
+          className="bg-background-surface border border-border-default rounded-3xl flex flex-col gap-9 w-full max-w-206 overflow-hidden p-8 max-h-[75vh] min-h-[550px]"
           style={{
             boxShadow: '0px 8px 24px -2px rgba(124, 77, 255, 0.16)',
           }}
@@ -53,8 +53,8 @@ const TermsLayout = ({ title, description, children }: TermsLayoutProps) => {
           </div>
 
           {/* 본문 스크롤 영역 */}
-          <div className="relative border border-border-default rounded-xl flex-1 min-h-0 overflow-hidden">
-            <div className="h-[667px] overflow-y-auto p-2.5 pr-3 scrollbar-thin">
+          <div className="relative border border-border-default rounded-xl flex-1 min-h-0 overflow-hidden h-full">
+            <div className="h-full overflow-y-auto p-2.5 pr-3 scrollbar-thin">
               <div className="text-sm font-normal leading-[22px] tracking-tight text-text-secondary whitespace-pre-wrap break-keep">
                 {children}
               </div>
