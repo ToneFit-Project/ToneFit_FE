@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useId } from 'react';
 import type { ReactNode } from 'react';
 import { ButtonLongV2 } from '@/components/ui';
 import { ToneFitPanel } from '@/components/panel';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
 import type {
   PanelView,
   GenerateParams,
@@ -11,7 +13,6 @@ import { postGeneration } from '@/api';
 import { devLog, devError } from '@/utils/devLog';
 import useGoogleAuth from '@/hooks/useGoogleAuth';
 import imgHeroEmail from '@/assets/here_content.png';
-import imgLogo from '@/assets/logo.svg';
 import imgToolbar from '@/assets/toolbar.svg';
 import iconClose from '@/assets/icon/icon-close.svg';
 import iconMaximize from '@/assets/icon/icon-maximize.svg';
@@ -155,67 +156,6 @@ const ToneFitToolbarIcon = () => {
       {/* ToneFit 아이콘 */}
       <img src={tTonefit} alt="ToneFit" className="relative z-10 size-7" />
     </span>
-  );
-};
-
-/** 네비게이션 헤더 */
-const DemoHeader = () => {
-  const headerRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!headerRef.current) return;
-      headerRef.current.classList.toggle('is-sticky', window.scrollY > 50);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  return (
-    <header
-      ref={headerRef}
-      id="header"
-      className="header w-full border-b border-border-default px-7 py-5 fixed z-9999"
-    >
-      <div className="header__bg bg-background-page absolute left-0 top-0 w-full h-full z-[-1] opacity-20" />
-      <div className="header__inner flex items-center justify-between">
-        {/* 로고 + 네비 */}
-        <div className="header__left flex items-center gap-14">
-          <a href="/" className="header__logo flex items-center gap-5">
-            <img
-              src={imgLogo}
-              alt="ToneFit 아이콘"
-              className="w-10 object-contain"
-            />
-            <span className="text-2xl-plus font-bold leading-9 tracking-[-0.56px] text-text-primary">
-              ToneFit
-            </span>
-          </a>
-          <nav className="header__nav flex items-center gap-5">
-            {['기능 소개', '사용 방법'].map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                className="px-6 py-2.5 text-xl font-semibold leading-7 tracking-tight text-text-primary text-center hover:text-text-brand transition-colors cursor-pointer"
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* 우측 버튼 그룹 */}
-        <div className="header__right flex items-center gap-2.5 drop-shadow-sm">
-          <a
-            href="https://chromewebstore.google.com/category/extensions"
-            target="_blank"
-            className="flex items-center justify-center py-2.5 px-4 bg-background-brand rounded-lg text-sm font-semibold leading-5 tracking-tight text-text-inverse hover:bg-background-brand-hover transition-colors"
-          >
-            ToneFit 시작하기
-          </a>
-        </div>
-      </div>
-    </header>
   );
 };
 
@@ -1101,24 +1041,26 @@ const MailSection = () => {
               onContentChange={setContent}
               isLoading={isGenerating || devForceView === 'loading'}
             />
-            <ToneFitPanel
-              remainingCount={remainingCount}
-              onRequest={handleRequest}
-              onSuccess={(s, c) => {
-                setSubject(s);
-                setContent(c);
-              }}
-              onReset={() => {
-                setSubject('');
-                setContent('');
-                // 새 이메일 작성 → 재시도 모드 해제
-                setIsRetryMode(false);
-                countBeforeAttemptRef.current = null;
-                localStorage.removeItem(DEMO_ATTEMPT_KEY);
-              }}
-              onExhausted={() => setShowExhaustedPopup(true)}
-              devForceView={devForceView}
-            />
+            <div className="bg-background-surface rounded-xl shadow-[0px_2px_4px_rgba(0,0,0,0.08)] flex flex-col w-full max-w-[437px] shrink-0">
+              <ToneFitPanel
+                remainingCount={remainingCount}
+                onRequest={handleRequest}
+                onSuccess={(s, c) => {
+                  setSubject(s);
+                  setContent(c);
+                }}
+                onReset={() => {
+                  setSubject('');
+                  setContent('');
+                  // 새 이메일 작성 → 재시도 모드 해제
+                  setIsRetryMode(false);
+                  countBeforeAttemptRef.current = null;
+                  localStorage.removeItem(DEMO_ATTEMPT_KEY);
+                }}
+                onExhausted={() => setShowExhaustedPopup(true)}
+                devForceView={devForceView}
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -1134,28 +1076,6 @@ const MailSection = () => {
     </>
   );
 };
-
-/** 푸터 */
-const DemoFooter = () => (
-  <footer className="footer w-full bg-background-page--20 border-t border-border-default px-5 py-3.5 text-base font-normal leading-6 tracking-tight text-text-secondary">
-    <div className="footer__inner flex items-center justify-between">
-      <p className="footer__copy p-2.5">
-        © 2026 ToneFit Inc. All rights reserved.
-      </p>
-      <div className="footer__link p-2.5 flex gap-6 items-center">
-        {['이용약관', '개인정보처리방침', '고객센터'].map((item) => (
-          <button
-            key={item}
-            type="button"
-            className="hover:text-text-primary transition-colors"
-          >
-            {item}
-          </button>
-        ))}
-      </div>
-    </div>
-  </footer>
-);
 
 // ─── 메인 페이지 ──────────────────────────────────────────────────
 
@@ -1199,12 +1119,12 @@ const DemoPage = () => {
           'linear-gradient(138.84deg, rgba(255,255,255,0.2) 11%, rgba(187,166,255,0.2) 27%, rgba(124,77,255,0.2) 94%), rgb(248,248,251)',
       }}
     >
-      <DemoHeader />
+      <Header />
       <main className="demo__contents">
         <HeroSection onStartDemo={handleStartDemo} />
         <MailSection />
       </main>
-      <DemoFooter />
+      <Footer />
     </div>
   );
 };

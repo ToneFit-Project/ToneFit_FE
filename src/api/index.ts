@@ -1,12 +1,9 @@
 /**
  * ToneFit API 클라이언트
  *
- * API 명세 v0.53 기준
- *
  * 토큰 정책:
- * - access_token  → localStorage (브라우저 재시작 후에도 유지)
- * - refresh_token → HttpOnly + Secure Cookie (브라우저 자동 송수신)
- *   → FE에서 직접 다루지 않음. `credentials: 'include'`로 자동 처리.
+ * - access_token → localStorage (Google OAuth 로그인 후 저장)
+ * - refresh_token 미사용 — 만료 시 재로그인
  */
 
 import axios from 'axios';
@@ -17,7 +14,6 @@ import type {
   // Auth
   GoogleAuthRequest,
   GoogleAuthResponse,
-  RefreshResponse,
   // Users
   UserProfile,
   ToggleTermsRequest,
@@ -52,8 +48,6 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  // refresh_token HttpOnly Cookie 자동 송수신
-  withCredentials: true,
 });
 
 // =============================================================
@@ -93,26 +87,12 @@ apiClient.interceptors.request.use(
 // =============================================================
 // 응답 인터셉터
 // - { success, data, error } 래퍼 자동 unwrap
-// - 401: /auth/refresh 호출 후 재요청 (cookie 자동 송신)
-// - 401/403 갱신 실패: access_token 삭제 + 홈으로 리다이렉트
+// - 401: access_token 삭제 + 홈으로 리다이렉트 (재로그인 유도)
+// - 403: /corrections 엔드포인트 제외하고 홈으로 리다이렉트
 // - 429: 그대로 throw
 // =============================================================
 
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (token: string) => void;
-  reject: (error: unknown) => void;
-}> = [];
-
-const processQueue = (error: unknown, token: string | null = null): void => {
-  failedQueue.forEach(({ resolve, reject }) => {
-    if (error) reject(error);
-    else if (token) resolve(token);
-  });
-  failedQueue = [];
-};
-
-/** access_token 삭제 (refresh_token은 쿠키 — BE 로그아웃 시 만료됨) */
+/** access_token 삭제 */
 const clearAccessToken = (): void => {
   localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
 };
@@ -155,45 +135,11 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // 401 Unauthorized — refresh_token(cookie)으로 갱신 시도
-    // /auth/refresh 자체가 401이면 인터셉터에서 처리하지 않음 (App.tsx catch로 전달)
-    const isRefreshEndpoint = originalRequest?.url?.includes('/auth/refresh');
-    if (status === 401 && !originalRequest._retry && !isRefreshEndpoint) {
-      if (isRefreshing) {
-        return new Promise<string>((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            return apiClient(originalRequest);
-          })
-          .catch((err) => Promise.reject(err));
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        // body 없음 — refresh_token은 cookie로 자동 송신
-        const response = await apiClient.post<RefreshResponse>('/auth/refresh');
-        const { access_token } = response.data;
-
-        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
-        apiClient.defaults.headers.common['Authorization'] =
-          `Bearer ${access_token}`;
-
-        processQueue(null, access_token);
-        isRefreshing = false;
-
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError, null);
-        isRefreshing = false;
-        clearAccessToken();
-        window.location.href = '/';
-        return Promise.reject(refreshError);
-      }
+    // 401 Unauthorized — 토큰 만료 → 재로그인 유도
+    if (status === 401) {
+      clearAccessToken();
+      window.location.href = '/';
+      return Promise.reject(error);
     }
 
     // 403 Forbidden
@@ -235,8 +181,7 @@ export const googleAuth = async (
 /**
  * 로그아웃
  *
- * BE에서 refresh_token row 삭제 + cookie 만료 헤더 발급.
- * FE는 access_token만 삭제.
+ * BE에 로그아웃 요청 후 FE access_token 삭제.
  */
 export const logout = async (): Promise<void> => {
   await apiClient.post('/auth/logout');

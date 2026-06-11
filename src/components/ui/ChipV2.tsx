@@ -144,7 +144,7 @@ const ChipV2 = ({
       aria-pressed={selected}
       className={[
         'inline-flex items-center justify-center whitespace-nowrap',
-        'transition-colors w-24.5 h-9 rounded-full border font-semibold',
+        'transition-colors h-9 rounded-full border font-semibold',
         stateClass,
         className,
       ]
