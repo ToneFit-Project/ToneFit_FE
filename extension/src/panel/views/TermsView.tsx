@@ -25,19 +25,19 @@ interface TermItem {
 const TERMS_LIST: TermItem[] = [
   {
     key: 'SERVICE',
-    label: '(필수) 서비스 이용약관',
+    label: '[필수] 서비스 이용약관',
     required: true,
     url: 'https://tonefit.kr/terms',
   },
   {
     key: 'PRIVACY',
-    label: '(필수) 개인정보처리방침',
+    label: '[필수] 개인정보처리방침',
     required: true,
     url: 'https://tonefit.kr/privacy',
   },
   {
     key: 'ANALYTICS',
-    label: '(필수) 행태 정보 수집 이용 고지',
+    label: '[필수] 행태 정보 수집 이용 고지',
     required: true,
     url: 'https://tonefit.kr/behavioral-data',
   },
