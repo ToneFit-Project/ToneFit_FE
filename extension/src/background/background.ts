@@ -34,24 +34,14 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 //    currentWindow가 Gmail 탭 창을 못 찾는 경우가 있음.
 //    → Gmail URL로 직접 탭을 찾는 방식으로 변경.
 
-const sendToGmailTab = (message: unknown) => {
-  chrome.tabs.query({ url: 'https://mail.google.com/*' }, (tabs) => {
-    if (tabs.length === 0) {
-      console.error('[ToneFit BG] Gmail 탭을 찾을 수 없습니다');
-      return;
-    }
-    // Gmail 탭이 여러 개면 전부 전송 (멀티탭 대응)
-    for (const tab of tabs) {
-      if (tab.id === null || tab.id === undefined) continue;
-      chrome.tabs.sendMessage(tab.id, message).catch((err) => {
-        console.error(
-          '[ToneFit BG] content script 전달 실패 (tabId:',
-          tab.id,
-          ')',
-          err.message
-        );
-      });
-    }
+const sendToTab = (tabId: number, message: unknown) => {
+  chrome.tabs.sendMessage(tabId, message).catch((err) => {
+    console.error(
+      '[ToneFit BG] content script 전달 실패 (tabId:',
+      tabId,
+      ')',
+      err.message
+    );
   });
 };
 
@@ -75,7 +65,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     message.type === 'GENERATION_START' ||
     message.type === 'GENERATION_ERROR'
   ) {
-    sendToGmailTab(message);
+    // 패널이 전달한 tabId로만 전송 (브로드캐스트 방지)
+    const tabId = message.tabId as number | undefined;
+    if (tabId !== null && tabId !== undefined) {
+      sendToTab(tabId, message);
+    } else {
+      console.error('[ToneFit BG] tabId 없음 — 메시지 전송 불가');
+    }
     return true;
   }
 

@@ -108,7 +108,7 @@ const Popup = () => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [dialog, setDialog] = useState<DialogState>('none');
-  const [aiConsent, setAiConsent] = useState(true);
+  const [aiConsent, setAiConsent] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -118,40 +118,60 @@ const Popup = () => {
       const token = await getStoredToken();
       setIsLoggedIn(!!token);
 
-      if (token) {
-        // API로 최신 프로필 조회
-        getMyProfile()
-          .then((profile) => {
+      if (!token) return;
+
+      // 1단계: 캐시에서 즉시 렌더
+      chrome.storage.local.get(
+        ['tonefit_popup_cache', 'tonefit_user_profile'],
+        (result) => {
+          const cache = result['tonefit_popup_cache'] as
+            | {
+                name?: string;
+                email?: string;
+                picture?: string;
+                aiConsent?: boolean;
+                marketingConsent?: boolean;
+              }
+            | undefined;
+          const profileStorage = result['tonefit_user_profile'] as
+            | { picture?: string }
+            | undefined;
+
+          if (cache) {
             setUserProfile({
-              name: profile.nickname ?? '',
-              email: profile.email ?? '',
+              name: cache.name ?? '',
+              email: cache.email ?? '',
+              picture: cache.picture,
             });
-          })
-          .catch((err) => {
-            console.error('[ToneFit Popup] 프로필 조회 실패:', err);
-            // 실패 시 로컬 캐시로 폴백
-            chrome.storage.local.get(['tonefit_user_profile'], (result) => {
-              const cached = result['tonefit_user_profile'] as
-                | UserProfile
-                | undefined;
-              if (cached) setUserProfile(cached);
-            });
-          });
-        // 동의 상태는 로컬에서 로드 (추후 API 연동 예정)
-        chrome.storage.local.get(
-          ['tonefit_ai_consent', 'tonefit_marketing_consent'],
-          (result) => {
-            if (result['tonefit_ai_consent'] !== undefined) {
-              setAiConsent(result['tonefit_ai_consent'] as boolean);
-            }
-            if (result['tonefit_marketing_consent'] !== undefined) {
-              setMarketingConsent(
-                result['tonefit_marketing_consent'] as boolean
-              );
-            }
+            setAiConsent(cache.aiConsent ?? false);
+            setMarketingConsent(cache.marketingConsent ?? false);
           }
-        );
-      }
+
+          // 2단계: 백그라운드에서 API 갱신
+          getMyProfile()
+            .then((profile) => {
+              const picture = profileStorage?.picture ?? cache?.picture;
+              const next = {
+                name: profile.nickname ?? '',
+                email: profile.email ?? '',
+                picture,
+                aiConsent: profile.ai_learning_agreed ?? false,
+                marketingConsent: profile.marketing_agreed ?? false,
+              };
+              setUserProfile({
+                name: next.name,
+                email: next.email,
+                picture: next.picture,
+              });
+              setAiConsent(next.aiConsent);
+              setMarketingConsent(next.marketingConsent);
+              chrome.storage.local.set({ tonefit_popup_cache: next });
+            })
+            .catch((err) => {
+              console.error('[ToneFit Popup] 프로필 조회 실패:', err);
+            });
+        }
+      );
     })();
   }, []);
 
@@ -180,6 +200,7 @@ const Popup = () => {
         'tonefit_user_profile',
         'tonefit_ai_consent',
         'tonefit_marketing_consent',
+        'tonefit_popup_cache',
       ]);
       // 사이드패널에 로그아웃 알림 → 패널이 start 화면으로 이동
       chrome.runtime.sendMessage({ type: 'LOGOUT' }).catch(() => {});
@@ -201,9 +222,11 @@ const Popup = () => {
       // OFF → ON: 즉시 반영
       setAiConsent(true);
       chrome.storage.local.set({ tonefit_ai_consent: true });
-      toggleTerms('AI_LEARNING', true).catch((err) =>
-        console.error('[ToneFit Popup] AI 동의 재동의 실패:', err)
-      );
+      toggleTerms('AI_LEARNING', true)
+        .then(() => console.error('[ToneFit Popup] AI 동의 ON 성공'))
+        .catch((err) =>
+          console.error('[ToneFit Popup] AI 동의 재동의 실패:', err)
+        );
     }
   };
 
@@ -212,9 +235,9 @@ const Popup = () => {
     setAiConsent(false);
     chrome.storage.local.set({ tonefit_ai_consent: false });
     setDialog('none');
-    toggleTerms('AI_LEARNING', false).catch((err) =>
-      console.error('[ToneFit Popup] AI 동의 철회 실패:', err)
-    );
+    toggleTerms('AI_LEARNING', false)
+      .then(() => console.error('[ToneFit Popup] AI 동의 OFF 성공'))
+      .catch((err) => console.error('[ToneFit Popup] AI 동의 철회 실패:', err));
   };
 
   // 마케팅 토글 처리 (즉시 반영)
@@ -222,9 +245,13 @@ const Popup = () => {
     const next = !marketingConsent;
     setMarketingConsent(next);
     chrome.storage.local.set({ tonefit_marketing_consent: next });
-    toggleTerms('MARKETING', next).catch((err) =>
-      console.error('[ToneFit Popup] 마케팅 동의 변경 실패:', err)
-    );
+    toggleTerms('MARKETING', next)
+      .then(() =>
+        console.error(`[ToneFit Popup] 마케팅 동의 ${next ? 'ON' : 'OFF'} 성공`)
+      )
+      .catch((err) =>
+        console.error('[ToneFit Popup] 마케팅 동의 변경 실패:', err)
+      );
   };
 
   // 외부 링크 열기
