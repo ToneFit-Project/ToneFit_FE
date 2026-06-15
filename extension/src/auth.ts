@@ -141,6 +141,7 @@ export const signInWithGoogle = async (
     tonefit_user_profile: {
       name: responseData.nickname,
       email: responseData.email,
+      picture: responseData.profile_image_url ?? null,
     },
     tonefit_ai_consent: aiConsent,
     tonefit_marketing_consent: marketingConsent,
