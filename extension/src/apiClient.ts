@@ -3,12 +3,19 @@
  *
  * 메인 앱의 apiClient와 별개로 관리.
  * - 토큰을 chrome.storage.local에서 직접 읽어 헤더에 주입
- * - async 인터셉터 미사용 (익스텐션 환경 안정성)
- * - 401 시 window.location 리다이렉트 없이 그대로 throw
+ * - 401 시 silent re-auth (interactive:false launchWebAuthFlow) 후 재시도
+ * - silent 발급 실패 시 그대로 throw → 호출자가 로그인 화면으로 이동
  */
 
 import axios from 'axios';
-import { getStoredToken } from '@ext/auth';
+
+const DEBUG = false; // 디버그 로그 확인 시 true로 변경
+import {
+  getStoredToken,
+  storeToken,
+  getGoogleIdToken,
+  signInWithGoogle,
+} from '@ext/auth';
 import type {
   GenerationRequest,
   GenerationResponse,
@@ -17,6 +24,31 @@ import type {
 } from '@/types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
+
+// silent re-auth 중복 호출 방지 — 진행 중인 Promise 재사용
+let silentReauthPromise: Promise<string> | null = null;
+
+/**
+ * access token 만료 시 silent re-auth
+ * interactive:false → 사용자 팝업 없이 Google 세션으로 조용히 갱신
+ * 실패 시 throw → 호출자가 session_expired 처리
+ */
+const silentReauth = (): Promise<string> => {
+  if (silentReauthPromise) return silentReauthPromise;
+
+  silentReauthPromise = (async () => {
+    try {
+      const idToken = await getGoogleIdToken();
+      const result = await signInWithGoogle(idToken);
+      await storeToken(result.data.access_token);
+      return result.data.access_token;
+    } finally {
+      silentReauthPromise = null;
+    }
+  })();
+
+  return silentReauthPromise;
+};
 
 /** auth 헤더 포함한 기본 헤더 반환 */
 const buildHeaders = async (): Promise<Record<string, string>> => {
@@ -30,6 +62,28 @@ const buildHeaders = async (): Promise<Record<string, string>> => {
     console.error('[ToneFit API] 저장된 토큰 없음 — 비인증 요청으로 진행');
   }
   return headers;
+};
+
+/**
+ * 401 응답 시 silent re-auth 후 재시도하는 래퍼
+ * fn: 헤더를 받아 실제 요청을 수행하는 함수
+ */
+const withReauth = async <T>(
+  fn: (headers: Record<string, string>) => Promise<T>
+): Promise<T> => {
+  const headers = await buildHeaders();
+  try {
+    return await fn(headers);
+  } catch (err) {
+    const status = (err as { response?: { status?: number } })?.response
+      ?.status;
+    if (status !== 401) throw err;
+
+    // silent re-auth 후 재시도
+    const newToken = await silentReauth();
+    const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
+    return await fn(retryHeaders);
+  }
 };
 
 /** API 응답 { success, data } 래퍼 unwrap */
@@ -51,8 +105,9 @@ const unwrap = <T>(data: unknown): T => {
 
 /** 내 정보 조회 */
 export const getMyProfile = async (): Promise<UserProfile> => {
-  const headers = await buildHeaders();
-  const response = await axios.get<unknown>(`${API_URL}/users/me`, { headers });
+  const response = await withReauth((headers) =>
+    axios.get<unknown>(`${API_URL}/users/me`, { headers })
+  );
   return unwrap<UserProfile>(response.data);
 };
 
@@ -61,11 +116,8 @@ export const toggleTerms = async (
   type: TermsType,
   agreed: boolean
 ): Promise<void> => {
-  const headers = await buildHeaders();
-  await axios.patch(
-    `${API_URL}/users/me/terms/${type}`,
-    { agreed },
-    { headers }
+  await withReauth((headers) =>
+    axios.patch(`${API_URL}/users/me/terms/${type}`, { agreed }, { headers })
   );
 };
 
@@ -73,18 +125,20 @@ export const toggleTerms = async (
 export const postGeneration = async (
   data: GenerationRequest
 ): Promise<GenerationResponse> => {
-  const headers = await buildHeaders();
-  console.error('[ToneFit API] postGeneration 요청', data);
+  if (DEBUG) console.error('[ToneFit API] postGeneration 요청', data);
 
-  const response = await axios.post<unknown>(`${API_URL}/generations`, data, {
-    headers,
-    timeout: 60000,
-  });
-
-  console.error(
-    '[ToneFit API] postGeneration 응답',
-    response.status,
-    response.data
+  const response = await withReauth((headers) =>
+    axios.post<unknown>(`${API_URL}/generations`, data, {
+      headers,
+      timeout: 60000,
+    })
   );
+
+  if (DEBUG)
+    console.error(
+      '[ToneFit API] postGeneration 응답',
+      response.status,
+      response.data
+    );
   return unwrap<GenerationResponse>(response.data);
 };

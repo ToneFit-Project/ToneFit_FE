@@ -151,6 +151,7 @@ export interface GoogleAuthResponse {
   user_id: number;
   email: string;
   nickname: string;
+  profile_image_url: string | null;
   provider: 'GOOGLE';
   is_guest: false;
   plan: PlanType;
@@ -174,12 +175,15 @@ export interface UserProfile {
   email: string | null;
   /** 정식 유저만 (Google 프로필 표시 이름). 익명은 null */
   nickname: string | null;
+  profile_image_url: string | null;
   /** 정식 유저만. 익명은 null */
   provider: 'GOOGLE' | null;
   is_guest: boolean;
   plan: PlanType;
   credit_balance: number;
   created_at: string; // ISO 8601
+  ai_learning_agreed: boolean;
+  marketing_agreed: boolean;
 }
 
 /** PATCH /users/me/terms/{type} 요청 — 선택 약관 철회·재동의 */

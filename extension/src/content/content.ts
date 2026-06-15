@@ -9,6 +9,14 @@
  * - Gmail 작성창 툴바에 ToneFit 아이콘 버튼 삽입
  */
 
+const DEBUG = false; // 디버그 로그 확인 시 true로 변경
+
+// Gmail SPA 내비게이션으로 스크립트가 중복 주입되는 것을 방지
+if ((window as Window & { __tonefit_injected?: boolean }).__tonefit_injected) {
+  throw new Error('[ToneFit] content script already injected — skipping');
+}
+(window as Window & { __tonefit_injected?: boolean }).__tonefit_injected = true;
+
 // ── Gmail DOM 셀렉터 ──────────────────────────────────────────────
 
 const COMPOSE_BTN_SELECTOR = 'div[gh="cm"]';
@@ -181,7 +189,7 @@ const injectToolbarButton = (composeEl: HTMLElement) => {
     // table 구조가 아닌 경우 fallback
     dropdownBtn.insertAdjacentElement('afterend', btn);
   }
-  console.error('[ToneFit] 툴바 버튼 삽입 완료 (드롭다운 우측)');
+  if (DEBUG) console.error('[ToneFit] 툴바 버튼 삽입 완료 (드롭다운 우측)');
 };
 
 /**
@@ -288,11 +296,12 @@ const showOverlay = () => {
   injectStyles();
   overlay.appendChild(spinner);
   container.appendChild(overlay);
-  console.error(
-    '[ToneFit] 오버레이 표시 완료',
-    container.tagName,
-    container.className
-  );
+  if (DEBUG)
+    console.error(
+      '[ToneFit] 오버레이 표시 완료',
+      container.tagName,
+      container.className
+    );
 };
 
 const removeOverlay = () => {
@@ -349,39 +358,19 @@ const injectBody = (content: string) => {
     selection.addRange(range);
   }
 
-  // 방법 1: DataTransfer paste
-  try {
-    const dt = new DataTransfer();
-    dt.setData('text/plain', content);
-    const pasted = bodyEl.dispatchEvent(
-      new ClipboardEvent('paste', {
-        clipboardData: dt,
-        bubbles: true,
-        cancelable: true,
-      })
-    );
-    if (pasted) {
-      console.error('[ToneFit] 본문 주입 완료 (paste 방식)');
-      return;
+  // DOM 직접 조작 — 줄바꿈 보존, XSS 방지 (innerHTML 미사용)
+  bodyEl.textContent = '';
+  for (const line of content.split('\n')) {
+    const div = document.createElement('div');
+    if (line === '') {
+      div.appendChild(document.createElement('br'));
+    } else {
+      div.appendChild(document.createTextNode(line));
     }
-  } catch {
-    /* 방법 2로 진행 */
+    bodyEl.appendChild(div);
   }
-
-  // 방법 2: execCommand
-  const inserted = document.execCommand('insertText', false, content);
-  if (inserted) {
-    console.error('[ToneFit] 본문 주입 완료 (execCommand 방식)');
-    return;
-  }
-
-  // 방법 3: innerHTML 직접 설정
-  bodyEl.innerHTML = content
-    .split('\n')
-    .map((line) => `<div>${line || '<br>'}</div>`)
-    .join('');
   bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
-  console.error('[ToneFit] 본문 주입 완료 (innerHTML 방식)');
+  if (DEBUG) console.error('[ToneFit] 본문 주입 완료');
 };
 
 const injectEmail = (subject: string, content: string) => {

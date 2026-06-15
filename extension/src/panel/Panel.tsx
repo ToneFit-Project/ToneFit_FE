@@ -178,7 +178,10 @@ const Panel = () => {
   // 약관 동의 전까지 id_token을 임시 보관
   const pendingIdTokenRef = useRef<string | null>(null);
 
-  // ── 앱 초기화: 저장된 토큰 확인 ─────────────────────────────────
+  // 현재 활성 Gmail 탭 ID — 메시지 전송 대상 특정용
+  const activeTabIdRef = useRef<number | null>(null);
+
+  // ── 앱 초기화: 저장된 토큰 확인 + 활성 탭 ID 저장 ──────────────
 
   useEffect(() => {
     getStoredToken()
@@ -187,6 +190,13 @@ const Panel = () => {
       })
       .catch(console.error)
       .finally(() => setIsLoading(false));
+
+    chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then((tabs) => {
+        activeTabIdRef.current = tabs[0]?.id ?? null;
+      })
+      .catch(console.error);
   }, []);
 
   // ── 팝업에서 로그아웃 시 start 화면으로 이동 ────────────────────
@@ -300,7 +310,8 @@ const Panel = () => {
       }
       requestTimestampsRef.current.push(now);
 
-      chrome.runtime.sendMessage({ type: 'GENERATION_START' });
+      const tabId = activeTabIdRef.current;
+      chrome.runtime.sendMessage({ type: 'GENERATION_START', tabId });
       try {
         const response = await postGeneration({
           receiver_type: params.receiver,
@@ -312,7 +323,7 @@ const Panel = () => {
           content: response.generated_email.replace(/\\n/g, '\n'),
         };
       } catch (err) {
-        chrome.runtime.sendMessage({ type: 'GENERATION_ERROR' });
+        chrome.runtime.sendMessage({ type: 'GENERATION_ERROR', tabId });
         throw err;
       }
     },
@@ -337,7 +348,12 @@ const Panel = () => {
   }, []);
 
   const handleSuccess = useCallback((subject: string, content: string) => {
-    chrome.runtime.sendMessage({ type: 'INSERT_EMAIL', subject, content });
+    chrome.runtime.sendMessage({
+      type: 'INSERT_EMAIL',
+      subject,
+      content,
+      tabId: activeTabIdRef.current,
+    });
   }, []);
 
   const handleReset = useCallback(() => {
