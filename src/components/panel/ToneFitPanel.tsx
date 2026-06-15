@@ -326,12 +326,26 @@ const PanelSuccessBody = ({
         </div>
         <div className="flex flex-col gap-3.5 items-center text-center">
           <p className="text-xl-plus font-semibold leading-7.5 tracking-tight text-text-primary">
-            쓰는 법을 몰라도 된다는 게,
-            <br />
-            이제 느껴지셨나요?
+            {mode === 'extension' ? (
+              '메일 초안이 완성됐어요'
+            ) : (
+              <>
+                쓰는 법을 몰라도 된다는 게,
+                <br />
+                이제 느껴지셨나요?
+              </>
+            )}
           </p>
           <p className="text-base font-normal leading-6 tracking-tight text-text-secondary text-center">
-            간단히 설치하고, 매번 이렇게 완성해보세요.
+            {mode === 'extension' ? (
+              <>
+                Gmail 작성 화면에 바로 넣어뒀어요.
+                <br />
+                확인하고 전송하면 끝이에요.
+              </>
+            ) : (
+              '간단히 설치하고, 매번 이렇게 완성해보세요.'
+            )}
           </p>
         </div>
       </div>
@@ -365,12 +379,12 @@ export type ErrorVariant = 'generic' | 'session_expired' | 'rate_limited';
 /** 에러 variant별 텍스트 설정 */
 const ERROR_CONFIG: Record<
   ErrorVariant,
-  { title: string; descLine1: string; descLine2: string }
+  { title: string; descLine1: string; descLine2: string; descLine3?: string }
 > = {
   generic: {
-    title: '이메일 생성을 완료하지 못했어요',
-    descLine1: '잠시 후 다시 시도해 주세요.',
-    descLine2: '입력하신 내용은 그대로 유지돼요.',
+    title: '초안 생성을 완료하지 못했어요',
+    descLine1: '입력한 내용은 그대로 있어요.',
+    descLine2: '잠시 후 다시 시도해 주세요.',
   },
   session_expired: {
     title: '다시 로그인이 필요해요',
@@ -379,8 +393,9 @@ const ERROR_CONFIG: Record<
   },
   rate_limited: {
     title: '요청이 잠시 제한되었어요',
-    descLine1: '짧은 시간에 생성 요청이 많았어요.',
-    descLine2: '1분 후 다시 시도해 주세요.',
+    descLine1: '짧은 시간에 요청이 몰려 잠시 멈췄어요.',
+    descLine2: '입력한 내용은 그대로 있고,',
+    descLine3: '시간이 지나면 다시 시도할 수 있어요.',
   },
 };
 
@@ -413,7 +428,7 @@ const PanelErrorBody = ({
     return () => clearInterval(timer);
   }, [variant]);
 
-  const { title, descLine1, descLine2 } = ERROR_CONFIG[variant];
+  const { title, descLine1, descLine2, descLine3 } = ERROR_CONFIG[variant];
 
   // CTA 버튼 설정
   const isCounting = variant === 'rate_limited' && countdown > 0;
@@ -421,7 +436,7 @@ const PanelErrorBody = ({
   const ss = String(countdown % 60).padStart(2, '0');
   const buttonLabel =
     variant === 'session_expired'
-      ? '로그인 하기'
+      ? '로그인하기'
       : isCounting
         ? `${mm}:${ss}`
         : '다시 시도';
@@ -442,6 +457,12 @@ const PanelErrorBody = ({
             {descLine1}
             <br />
             {descLine2}
+            {descLine3 && (
+              <>
+                <br />
+                {descLine3}
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -721,6 +742,7 @@ const ToneFitPanel = ({
       )}
       {activeView === 'error' && (
         <PanelErrorBody
+          key={errorVariant}
           variant={errorVariant}
           onRetry={handleRetry}
           onGoToLogin={onGoToLogin}
