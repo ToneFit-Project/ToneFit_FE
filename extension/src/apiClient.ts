@@ -8,6 +8,8 @@
  */
 
 import axios from 'axios';
+
+const DEBUG = false; // 디버그 로그 확인 시 true로 변경
 import { getStoredToken } from '@ext/auth';
 import type {
   GenerationRequest,
@@ -74,17 +76,18 @@ export const postGeneration = async (
   data: GenerationRequest
 ): Promise<GenerationResponse> => {
   const headers = await buildHeaders();
-  console.error('[ToneFit API] postGeneration 요청', data);
+  if (DEBUG) console.error('[ToneFit API] postGeneration 요청', data);
 
   const response = await axios.post<unknown>(`${API_URL}/generations`, data, {
     headers,
     timeout: 60000,
   });
 
-  console.error(
-    '[ToneFit API] postGeneration 응답',
-    response.status,
-    response.data
-  );
+  if (DEBUG)
+    console.error(
+      '[ToneFit API] postGeneration 응답',
+      response.status,
+      response.data
+    );
   return unwrap<GenerationResponse>(response.data);
 };
