@@ -375,13 +375,19 @@ const injectBody = (content: string) => {
     return;
   }
 
-  // 방법 3: innerHTML 직접 설정
-  bodyEl.innerHTML = content
-    .split('\n')
-    .map((line) => `<div>${line || '<br>'}</div>`)
-    .join('');
+  // 방법 3: textContent 직접 설정 (XSS 방지 — innerHTML 미사용)
+  bodyEl.textContent = '';
+  for (const line of content.split('\n')) {
+    const div = document.createElement('div');
+    if (line === '') {
+      div.appendChild(document.createElement('br'));
+    } else {
+      div.appendChild(document.createTextNode(line));
+    }
+    bodyEl.appendChild(div);
+  }
   bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
-  console.error('[ToneFit] 본문 주입 완료 (innerHTML 방식)');
+  console.error('[ToneFit] 본문 주입 완료 (textContent 방식)');
 };
 
 const injectEmail = (subject: string, content: string) => {
