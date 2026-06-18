@@ -15,8 +15,17 @@ import type {
   PanelView,
   ErrorVariant,
 } from '@/components/panel';
-import { postGeneration } from '@ext/apiClient';
-import type { TermsType } from '@/types';
+import {
+  postGeneration,
+  postCorrection,
+  postCorrectionsRejections,
+} from '@ext/apiClient';
+import type {
+  TermsType,
+  CorrectionsRejectionItem,
+  ReceiverType,
+  PurposeType,
+} from '@/types';
 import StartView from './views/StartView';
 import TermsView from './views/TermsView';
 import Tooltip from './components/Tooltip';
@@ -32,7 +41,20 @@ type Screen = 'start' | 'terms' | 'main';
 // ── DEV 툴바 ─────────────────────────────────────────────────────────
 
 const SCREENS: Screen[] = ['start', 'terms', 'main'];
-const VIEWS: PanelView[] = ['input', 'loading', 'success', 'error'];
+const VIEWS: PanelView[] = [
+  'input',
+  'loading',
+  'success',
+  'error',
+  'correction-review',
+];
+const VIEW_LABELS: Record<PanelView, string> = {
+  input: 'input',
+  loading: 'load',
+  success: 'done',
+  error: 'err',
+  'correction-review': 'review',
+};
 const ERROR_VARIANTS: ErrorVariant[] = [
   'generic',
   'session_expired',
@@ -51,6 +73,8 @@ const DevToolbar = ({
   onViewChange,
   errorVariant,
   onErrorVariantChange,
+  devPanelMode,
+  onPanelModeChange,
 }: {
   screen: Screen;
   onScreenChange: (s: Screen) => void;
@@ -58,9 +82,13 @@ const DevToolbar = ({
   onViewChange: (v: PanelView | undefined) => void;
   errorVariant: ErrorVariant;
   onErrorVariantChange: (v: ErrorVariant) => void;
+  devPanelMode: 'generate' | 'correct';
+  onPanelModeChange: (m: 'generate' | 'correct') => void;
 }) => {
   const [open, setOpen] = useState(false);
   const isErrorView = devView === 'error';
+  const showModeToggle =
+    isErrorView || devView === 'loading' || devView === 'success';
 
   return (
     <div className="fixed bottom-36 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-1.5">
@@ -95,19 +123,19 @@ const DevToolbar = ({
               <p className="text-2xs text-text-inverse/50 font-medium uppercase tracking-wide">
                 View
               </p>
-              <div className="flex gap-1">
+              <div className="flex gap-1 flex-wrap">
                 {VIEWS.map((v) => (
                   <button
                     key={v}
                     type="button"
                     onClick={() => onViewChange(devView === v ? undefined : v)}
-                    className={`flex-1 text-2xs rounded px-1.5 py-1 transition-colors cursor-pointer ${
+                    className={`text-2xs rounded px-1.5 py-1 transition-colors cursor-pointer ${
                       devView === v
                         ? 'bg-background-brand text-text-inverse'
                         : 'bg-background-inverse/30 text-text-inverse/70 hover:bg-background-inverse/50'
                     }`}
                   >
-                    {v}
+                    {VIEW_LABELS[v]}
                   </button>
                 ))}
               </div>
@@ -138,6 +166,31 @@ const DevToolbar = ({
               </div>
             </div>
           )}
+
+          {/* 모드 전환 (error / loading 뷰에서 메시지 확인용) */}
+          {screen === 'main' && showModeToggle && (
+            <div className="flex flex-col gap-1">
+              <p className="text-2xs text-text-inverse/50 font-medium uppercase tracking-wide">
+                Mode
+              </p>
+              <div className="flex gap-1">
+                {(['generate', 'correct'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => onPanelModeChange(m)}
+                    className={`flex-1 text-2xs rounded px-1.5 py-1 transition-colors cursor-pointer ${
+                      devPanelMode === m
+                        ? 'bg-background-brand-subtle text-text-brand'
+                        : 'bg-background-inverse/30 text-text-inverse/70 hover:bg-background-inverse/50'
+                    }`}
+                  >
+                    {m === 'generate' ? '생성' : '교정'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -163,14 +216,17 @@ const TERMS_VERSION = '1.0';
 const Panel = () => {
   const [screen, setScreen] = useState<Screen>('start');
   const [devView, setDevView] = useState<PanelView | undefined>(undefined);
+  const [devPanelMode, setDevPanelMode] = useState<'generate' | 'correct'>(
+    'generate'
+  );
+  const [initialPanelMode, setInitialPanelMode] = useState<
+    'generate' | 'correct'
+  >('generate');
   // 익스텐션은 무제한 — Infinity로 설정해 소진 로직 비활성화
   const [remainingCount] = useState(Infinity);
   const [errorVariant, setErrorVariant] = useState<ErrorVariant>('generic');
 
   // 레이트리밋: 1분 내 최대 5회
-  const requestTimestampsRef = useRef<number[]>([]);
-  const RATE_LIMIT = 5;
-  const RATE_WINDOW_MS = 60_000;
   const [authError, setAuthError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -184,19 +240,60 @@ const Panel = () => {
   // ── 앱 초기화: 저장된 토큰 확인 + 활성 탭 ID 저장 ──────────────
 
   useEffect(() => {
-    getStoredToken()
-      .then((token) => {
-        if (token) setScreen('main');
-      })
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
-
     chrome.tabs
       .query({ active: true, currentWindow: true })
       .then((tabs) => {
-        activeTabIdRef.current = tabs[0]?.id ?? null;
+        const tabId = tabs[0]?.id ?? null;
+        activeTabIdRef.current = tabId;
+
+        if (tabId) {
+          chrome.tabs.sendMessage(tabId, { type: 'PANEL_OPENED' });
+          // 패널 닫힐 때(언로드) content script에 알림
+          window.addEventListener(
+            'unload',
+            () => {
+              chrome.runtime.sendMessage({ type: 'PANEL_UNLOADED', tabId });
+            },
+            { once: true }
+          );
+        }
+
+        getStoredToken()
+          .then((token) => {
+            if (!token) return;
+            // 이미 로그인된 상태로 패널 오픈 → Gmail 본문 확인 후 초기 모드 결정
+            if (tabId) {
+              chrome.tabs.sendMessage(
+                tabId,
+                { type: 'GET_EMAIL_CONTENT' },
+                (response) => {
+                  if (!chrome.runtime.lastError) {
+                    const content = (response?.content ?? '').trim();
+                    console.error(
+                      '[ToneFit] 본문 글자수:',
+                      content.length,
+                      '/ 내용 미리보기:',
+                      content.slice(0, 60)
+                    );
+                    const hasContent = content.length >= 40;
+                    setInitialPanelMode(hasContent ? 'correct' : 'generate');
+                  } else {
+                    console.error(
+                      '[ToneFit] GET_EMAIL_CONTENT 실패:',
+                      chrome.runtime.lastError.message
+                    );
+                  }
+                  setScreen('main');
+                }
+              );
+            } else {
+              setScreen('main');
+            }
+          })
+          .catch(console.error)
+          .finally(() => setIsLoading(false));
       })
-      .catch(console.error);
+      .catch(() => setIsLoading(false));
   }, []);
 
   // ── 팝업에서 로그아웃 시 start 화면으로 이동 ────────────────────
@@ -215,8 +312,45 @@ const Panel = () => {
   const dismissTooltip = useCallback(() => setShowTooltip(false), []);
 
   const goToMain = useCallback((showTip = false) => {
-    setScreen('main');
-    if (showTip) setShowTooltip(true);
+    // Gmail 본문 내용 유무에 따라 초기 모드 결정 → 결정 후 화면 전환
+    chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then((tabs) => {
+        const tabId = tabs[0]?.id;
+        if (!tabId) {
+          setScreen('main');
+          if (showTip) setShowTooltip(true);
+          return;
+        }
+        chrome.tabs.sendMessage(
+          tabId,
+          { type: 'GET_EMAIL_CONTENT' },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              console.error(
+                '[ToneFit] GET_EMAIL_CONTENT 실패:',
+                chrome.runtime.lastError.message
+              );
+            } else {
+              const content = (response?.content ?? '').trim();
+              console.error(
+                '[ToneFit] 본문 글자수:',
+                content.length,
+                '/ 내용 미리보기:',
+                content.slice(0, 60)
+              );
+              const hasContent = content.length >= 40;
+              setInitialPanelMode(hasContent ? 'correct' : 'generate');
+            }
+            setScreen('main');
+            if (showTip) setShowTooltip(true);
+          }
+        );
+      })
+      .catch(() => {
+        setScreen('main');
+        if (showTip) setShowTooltip(true);
+      });
   }, []);
 
   // ── Google 로그인 ────────────────────────────────────────────────
@@ -298,27 +432,75 @@ const Panel = () => {
 
   // ── ToneFitPanel 핸들러 ─────────────────────────────────────────
 
+  /** Gmail 작성창 본문과 제목을 content script에서 읽어옴 */
+  const getEmailContentFromGmail = useCallback((): Promise<{
+    content: string;
+    subject: string;
+  }> => {
+    return new Promise((resolve, reject) => {
+      const tabId = activeTabIdRef.current;
+      if (!tabId) {
+        reject(new Error('활성 탭을 찾을 수 없습니다'));
+        return;
+      }
+      chrome.tabs.sendMessage(
+        tabId,
+        { type: 'GET_EMAIL_CONTENT' },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          resolve({
+            content: response?.content ?? '',
+            subject: response?.subject ?? '',
+          });
+        }
+      );
+    });
+  }, []);
+
+  /** 교정 시작 전 본문 길이 사전 검증 — 10자 미만이면 _tooShort throw */
+  const handlePreCheck = useCallback(async () => {
+    const { content } = await getEmailContentFromGmail();
+    if (content.trim().length < 10) {
+      throw Object.assign(new Error('EMAIL_TOO_SHORT'), { _tooShort: true });
+    }
+  }, [getEmailContentFromGmail]);
+
   const handleRequest = useCallback(
     async (params: GenerateParams): Promise<GenerateResult> => {
-      // 레이트리밋 체크 — 1분 내 5회 초과 시 오버레이 없이 바로 에러
-      const now = Date.now();
-      requestTimestampsRef.current = requestTimestampsRef.current.filter(
-        (t) => now - t < RATE_WINDOW_MS
-      );
-      if (requestTimestampsRef.current.length >= RATE_LIMIT) {
-        throw Object.assign(new Error('RATE_LIMITED'), { _rateLimited: true });
-      }
-      requestTimestampsRef.current.push(now);
-
       const tabId = activeTabIdRef.current;
       chrome.runtime.sendMessage({ type: 'GENERATION_START', tabId });
+
       try {
+        // 교정 모드: Gmail 본문 읽어서 교정 API 호출 → 리뷰 뷰로 전환
+        if (params.correctionMode) {
+          const { content: originalEmail } = await getEmailContentFromGmail();
+          const response = await postCorrection({
+            receiver_type: params.receiver,
+            purpose: params.purpose,
+            original_email: originalEmail,
+          });
+          // 오버레이는 리뷰 완료(onSuccess) 시점에 제거 — 여기선 유지
+          chrome.runtime.sendMessage({ type: 'GENERATION_ERROR', tabId }); // 오버레이 해제
+          return {
+            type: 'correction' as const,
+            changes: response.changes,
+            originalEmail,
+            receiver: params.receiver,
+            purpose: params.purpose,
+          };
+        }
+
+        // 생성 모드
         const response = await postGeneration({
           receiver_type: params.receiver,
           purpose: params.purpose,
           brief_content: params.emailText,
         });
         return {
+          type: 'email' as const,
           subject: response.generated_subject,
           content: response.generated_email.replace(/\\n/g, '\n'),
         };
@@ -327,19 +509,31 @@ const Panel = () => {
         throw err;
       }
     },
-
-    []
+    [getEmailContentFromGmail]
   );
 
   /** 에러 종류 판별 — ToneFitPanel의 onError 콜백에서 호출 */
   const handleError = useCallback((err: unknown) => {
-    const isRateLimit = (err as { _rateLimited?: boolean })?._rateLimited;
-    if (isRateLimit) {
+    const sessionExpired = (err as { _sessionExpired?: boolean })
+      ?._sessionExpired;
+    const status = (err as { response?: { status?: number } })?.response
+      ?.status;
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('[ToneFit] handleError:', {
+      sessionExpired,
+      status,
+      errMsg,
+      err,
+    });
+
+    if (sessionExpired) {
+      setErrorVariant('session_expired');
+      return;
+    }
+    if (status === 429) {
       setErrorVariant('rate_limited');
       return;
     }
-    const status = (err as { response?: { status?: number } })?.response
-      ?.status;
     if (status === 401) {
       setErrorVariant('session_expired');
       return;
@@ -360,9 +554,31 @@ const Panel = () => {
     // 새 이메일 작성 → 패널 초기화
   }, []);
 
+  const handleCorrectionsRejected = useCallback(
+    (
+      items: CorrectionsRejectionItem[],
+      receiver: ReceiverType,
+      purpose: PurposeType
+    ) => {
+      const payload = { receiver_type: receiver, purpose, items };
+      console.error(
+        '[ToneFit] corrections/rejections 전송:',
+        JSON.stringify(payload, null, 2)
+      );
+      postCorrectionsRejections(payload)
+        .then((res) =>
+          console.error('[ToneFit] corrections/rejections 응답:', res)
+        )
+        .catch(console.error);
+    },
+    []
+  );
+
   const handleCancel = useCallback(() => {
-    // 오버레이 제거
-    chrome.runtime.sendMessage({ type: 'GENERATION_ERROR' });
+    chrome.runtime.sendMessage({
+      type: 'GENERATION_ERROR',
+      tabId: activeTabIdRef.current,
+    });
   }, []);
 
   /** 세션 만료 에러 → 토큰 제거 후 로그인 화면으로 */
@@ -382,7 +598,7 @@ const Panel = () => {
   }
 
   return (
-    <div className="w-full h-screen bg-background-page flex flex-col">
+    <div className="w-full h-screen flex flex-col bg-background-page">
       <div className="inner bg-background-surface rounded-xl max-w-[360px] w-full h-full mx-auto overflow-hidden">
         {screen === 'start' && (
           <StartView
@@ -411,7 +627,11 @@ const Panel = () => {
                 showTooltip ? <Tooltip onClose={dismissTooltip} /> : undefined
               }
               onChipSelect={dismissTooltip}
-              devForceView={devView}
+              onCorrectionsRejected={handleCorrectionsRejected}
+              onPreCheck={handlePreCheck}
+              initialPanelMode={initialPanelMode}
+              devForceView={SHOW_DEV_TOOLBAR ? devView : undefined}
+              devPanelMode={SHOW_DEV_TOOLBAR ? devPanelMode : undefined}
             />
           </div>
         )}
@@ -429,6 +649,8 @@ const Panel = () => {
           onViewChange={setDevView}
           errorVariant={errorVariant}
           onErrorVariantChange={setErrorVariant}
+          devPanelMode={devPanelMode}
+          onPanelModeChange={setDevPanelMode}
         />
       )}
     </div>

@@ -55,7 +55,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'OPEN_SIDE_PANEL') {
     const tabId = sender.tab?.id;
     if (tabId !== null && tabId !== undefined) {
-      chrome.sidePanel.open({ tabId }).catch(console.error);
+      chrome.sidePanel
+        .open({ tabId })
+        .then(() => sendToTab(tabId, { type: 'PANEL_OPENED' }))
+        .catch(console.error);
+    }
+    return true;
+  }
+
+  // 패널 언로드 시 아이콘 상태 초기화
+  if (message.type === 'PANEL_UNLOADED') {
+    const tabId = message.tabId as number | undefined;
+    if (tabId !== null && tabId !== undefined) {
+      sendToTab(tabId, { type: 'PANEL_CLOSED' });
     }
     return true;
   }

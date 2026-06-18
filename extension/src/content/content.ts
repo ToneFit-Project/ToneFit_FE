@@ -124,6 +124,10 @@ const injectStyles = () => {
       animation: tonefit-pulse 3.2s ease-in-out infinite;
       pointer-events: none;
     }
+    .tonefit-toolbar-btn.tonefit-panel-open .tonefit-btn-bg {
+      opacity: 1 !important;
+      animation: none !important;
+    }
     .tonefit-btn-icon {
       position: relative;
       z-index: 1;
@@ -338,6 +342,19 @@ const injectSubject = (subject: string) => {
   subjectEl.dispatchEvent(new Event('change', { bubbles: true }));
 };
 
+/** 서명 요소를 재귀적으로 제거한 본문 텍스트 반환 */
+const getBodyTextWithoutSignature = (bodyEl: HTMLElement): string => {
+  const clone = bodyEl.cloneNode(true) as HTMLElement;
+  clone
+    .querySelectorAll(
+      '.gmail_signature, .gmail_signature_prefix, [data-smartmail="gmail_signature"]'
+    )
+    .forEach((el) => el.remove());
+  return Array.from(clone.children)
+    .map((child) => (child as HTMLElement).innerText.replace(/\n+$/, ''))
+    .join('\n');
+};
+
 const injectBody = (content: string) => {
   const bodyEl = getBodyElement();
   if (!bodyEl) {
@@ -358,17 +375,16 @@ const injectBody = (content: string) => {
     selection.addRange(range);
   }
 
-  // DOM 직접 조작 — 줄바꿈 보존, XSS 방지 (innerHTML 미사용)
-  bodyEl.textContent = '';
-  for (const line of content.split('\n')) {
-    const div = document.createElement('div');
-    if (line === '') {
-      div.appendChild(document.createElement('br'));
-    } else {
-      div.appendChild(document.createTextNode(line));
-    }
-    bodyEl.appendChild(div);
-  }
+  // innerHTML로 한 번에 주입 — textContent + appendChild 루프는
+  // Gmail mutation observer가 각 div를 재처리해 \n이 누적됨
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  bodyEl.innerHTML = content
+    .split('\n')
+    .map((line) =>
+      line === '' ? '<div><br></div>' : `<div>${escapeHtml(line)}</div>`
+    )
+    .join('');
   bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
   if (DEBUG) console.error('[ToneFit] 본문 주입 완료');
 };
@@ -406,7 +422,7 @@ const openComposeAndInject = async (subject: string, content: string) => {
 
 // ── 메시지 수신 ───────────────────────────────────────────────────
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'GENERATION_START') {
     showOverlay();
     return;
@@ -430,5 +446,32 @@ chrome.runtime.onMessage.addListener((message) => {
     } else {
       openComposeAndInject(subject, content);
     }
+    return;
+  }
+
+  if (message.type === 'PANEL_OPENED') {
+    document
+      .querySelectorAll<HTMLElement>(`.${TOOLBAR_BTN_CLASS}`)
+      .forEach((btn) => btn.classList.add('tonefit-panel-open'));
+    return;
+  }
+
+  if (message.type === 'PANEL_CLOSED') {
+    document
+      .querySelectorAll<HTMLElement>(`.${TOOLBAR_BTN_CLASS}`)
+      .forEach((btn) => btn.classList.remove('tonefit-panel-open'));
+    return;
+  }
+
+  if (message.type === 'GET_EMAIL_CONTENT') {
+    const bodyEl = getBodyElement();
+    const subjectEl = document.querySelector<HTMLInputElement>(
+      'input[name="subjectbox"]'
+    );
+    sendResponse({
+      content: bodyEl ? getBodyTextWithoutSignature(bodyEl) : '',
+      subject: subjectEl?.value ?? '',
+    });
+    return true;
   }
 });
