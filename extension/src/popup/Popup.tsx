@@ -168,6 +168,19 @@ const Popup = () => {
               chrome.storage.local.set({ tonefit_popup_cache: next });
             })
             .catch((err) => {
+              const status = (err as { response?: { status?: number } })
+                ?.response?.status;
+              if (status === 401) {
+                // 토큰 만료 + silent reauth 실패 → 캐시 제거 후 로그인 화면으로
+                chrome.storage.local.remove([
+                  'tonefit_access_token',
+                  'tonefit_user_profile',
+                  'tonefit_popup_cache',
+                ]);
+                chrome.runtime.sendMessage({ type: 'LOGOUT' }).catch(() => {});
+                window.close();
+                return;
+              }
               console.error('[ToneFit Popup] 프로필 조회 실패:', err);
             });
         }
@@ -318,7 +331,7 @@ const Popup = () => {
   if (!isLoggedIn) {
     return (
       <div
-        className="bg-background-page flex flex-col gap-10 items-center p-3 rounded-2xl"
+        className="bg-background-page flex flex-col gap-10 items-center p-3"
         style={{ width: 340 }}
       >
         <Header />
@@ -447,7 +460,7 @@ const Popup = () => {
   // ── 로그인 상태 (+ 다이얼로그 오버레이) ────────────────────────────
   return (
     <div
-      className="bg-background-page flex flex-col gap-4 items-center p-3 rounded-2xl relative"
+      className="bg-background-page flex flex-col gap-4 items-center p-3 relative"
       style={{ width: 340 }}
     >
       <Header />
