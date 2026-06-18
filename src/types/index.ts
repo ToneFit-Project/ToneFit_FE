@@ -207,7 +207,6 @@ export interface CorrectionChange {
   label: CorrectionLabelType; // AUTO | SUGGEST | STYLE
   confidence: number; // 교정 신뢰도 0~1
   applied_rules: string[]; // 적용된 규칙 코드
-  action: FeedbackActionType | null; // 사용자 응답 (미응답 시 null)
 }
 
 /** 임시저장(Draft) 요청 — 모든 필드 선택 */
@@ -247,9 +246,25 @@ export interface CorrectionRequest {
 
 /** POST /corrections 응답 (201) */
 export interface CorrectionResponse {
-  session_id: number;
   changes: CorrectionChange[];
-  created_at: string;
+}
+
+/** POST /corrections/rejections 요청 — 거절 항목 보존 */
+export interface CorrectionsRejectionItem {
+  label: CorrectionLabelType;
+  original_phrase: string;
+  corrected_phrase: string;
+  meaning_damage_suspected?: boolean | null;
+}
+
+export interface CorrectionsRejectionsRequest {
+  receiver_type: ReceiverType;
+  purpose: PurposeType;
+  items: CorrectionsRejectionItem[];
+}
+
+export interface CorrectionsRejectionsResponse {
+  stored: number;
 }
 
 /**

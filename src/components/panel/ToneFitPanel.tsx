@@ -29,10 +29,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { ChipV2, ButtonLongV2 } from '@/components/ui';
-import type { ReceiverType, PurposeType } from '@/types';
+import type {
+  ReceiverType,
+  PurposeType,
+  CorrectionChange,
+  CorrectionLabelType,
+  CorrectionsRejectionItem,
+} from '@/types';
 import imgPanelIcon from '@/assets/mail-logo.svg';
 import iconAiPencil from '@/assets/aiPencil.svg';
 import iconExclamation from '@/assets/icon/icon-exclamation.svg';
+import { MailPackingIcon } from '@/components/ui/MotionIcons';
 
 // =============================================================
 // 도메인 데이터
@@ -56,6 +63,45 @@ const PURPOSE_OPTIONS: { value: PurposeType; label: string }[] = [
 
 /** 이메일 내용 입력 최대 글자 수 (생성용 brief — 교정용 2000자와 다름) */
 const EMAIL_MAX = 200;
+
+/** [DEV ONLY] 교정 리뷰 화면 미리보기용 mock 데이터 */
+const DEV_MOCK_ORIGINAL =
+  '팀장님, 보고서 확인해주세요. 문제 있으면 알려주세요.';
+const DEV_MOCK_CHANGES: import('@/types').CorrectionChange[] = [
+  {
+    index: 0,
+    start: 8,
+    end: 14,
+    original: '확인해주세요',
+    corrected: '확인 부탁드립니다',
+    reason: '구어적인 요청을 업무 메일에 맞는 정중한 표현으로 다듬었습니다.',
+    label: 'AUTO',
+    confidence: 0.95,
+    applied_rules: [],
+  },
+  {
+    index: 1,
+    start: 17,
+    end: 23,
+    original: '문제 있으면',
+    corrected: '특이사항 있으면',
+    reason: '모호한 표현을 협업자가 바로 이해할 수 있게 구체화했습니다.',
+    label: 'SUGGEST',
+    confidence: 0.88,
+    applied_rules: [],
+  },
+  {
+    index: 2,
+    start: 24,
+    end: 29,
+    original: '알려주세요',
+    corrected: '말씀해 주세요',
+    reason: '친근한 느낌은 유지하되 비즈니스 메일 톤에 맞게 정리했습니다.',
+    label: 'STYLE',
+    confidence: 0.75,
+    applied_rules: [],
+  },
+];
 
 // =============================================================
 // 유틸
@@ -81,20 +127,33 @@ const isOnlyJamoOrSpaces = (text: string): boolean => {
 // 타입
 // =============================================================
 
-export type PanelView = 'input' | 'loading' | 'success' | 'error';
+export type PanelView =
+  | 'input'
+  | 'loading'
+  | 'success'
+  | 'error'
+  | 'correction-review';
+export type PanelMode = 'generate' | 'correct';
 
 /** onRequest에 전달되는 생성 파라미터 */
 export interface GenerateParams {
   receiver: ReceiverType;
   purpose: PurposeType;
   emailText: string;
+  /** 교정 모드 여부 — 익스텐션에서 Gmail 본문을 읽어 교정 API 호출 시 true */
+  correctionMode?: boolean;
 }
 
-/** onRequest가 반환하는 생성 결과 */
-export interface GenerateResult {
-  subject: string;
-  content: string;
-}
+/** onRequest가 반환하는 생성 결과 — 생성 모드와 교정 모드 분기 */
+export type GenerateResult =
+  | { type: 'email'; subject: string; content: string }
+  | {
+      type: 'correction';
+      changes: CorrectionChange[];
+      originalEmail: string;
+      receiver: ReceiverType;
+      purpose: PurposeType;
+    };
 
 export interface ToneFitPanelProps {
   /**
@@ -151,8 +210,23 @@ export interface ToneFitPanelProps {
   errorVariant?: ErrorVariant;
   /** 세션 만료 에러 화면의 "로그인 하기" 버튼 콜백 */
   onGoToLogin?: () => void;
+  /** 교정 완료 시 거절 항목 전송 콜백 (fire-and-forget, 실패해도 UI에 영향 없음) */
+  onCorrectionsRejected?: (
+    items: CorrectionsRejectionItem[],
+    receiver: ReceiverType,
+    purpose: PurposeType
+  ) => void;
   /** [DEV ONLY] 패널 뷰 강제 지정. undefined면 내부 상태 사용 */
   devForceView?: PanelView;
+  /** [DEV ONLY] 패널 모드 강제 지정 (error/loading 메시지 미리보기용) */
+  devPanelMode?: PanelMode;
+  /** 패널 초기 모드 — Gmail 본문 유무 등 외부 조건으로 결정 시 사용 */
+  initialPanelMode?: PanelMode;
+  /**
+   * 교정 모드에서 setView('loading') 전에 실행되는 사전 검증 콜백
+   * throw하면 로딩 전환 없이 중단 — 토스트 메시지를 직접 throw와 함께 전달
+   */
+  onPreCheck?: () => Promise<void>;
 }
 
 // =============================================================
@@ -213,10 +287,12 @@ const PanelLoadingBody = ({
   receiverLabel,
   purposeLabel,
   onCancel,
+  message,
 }: {
   receiverLabel: string;
   purposeLabel: string;
   onCancel?: () => void;
+  message?: string;
 }) => {
   const [elapsed, setElapsed] = useState(0);
   const [stepIdx, setStepIdx] = useState(0);
@@ -282,13 +358,15 @@ const PanelLoadingBody = ({
         {/* 텍스트 */}
         <div className="flex flex-col gap-2 items-center text-center w-80">
           <h6 className="text-xl font-medium leading-7 tracking-tight text-text-primary">
-            {getLoadingMessage(elapsed, receiverLabel, purposeLabel)}
+            {message ?? getLoadingMessage(elapsed, receiverLabel, purposeLabel)}
           </h6>
-          <p className="text-sm font-normal leading-5.5 tracking-tight text-text-tertiary">
-            입력하신 내용을 바탕으로
-            <br />
-            자연스러운 톤의 이메일을 만드는 중입니다.
-          </p>
+          {!message && (
+            <p className="text-sm font-normal leading-5.5 tracking-tight text-text-tertiary">
+              입력하신 내용을 바탕으로
+              <br />
+              자연스러운 톤의 이메일을 만드는 중입니다.
+            </p>
+          )}
         </div>
       </div>
 
@@ -302,31 +380,275 @@ const PanelLoadingBody = ({
   );
 };
 
-/** 생성 성공 화면 */
-const PanelSuccessBody = ({
-  mode = 'demo',
+/** 교정 완료 요약 화면 */
+const PanelCorrectionSuccessBody = ({
+  acceptedChanges,
+  rejectedChanges,
+  totalCount,
   onReset,
 }: {
-  mode?: 'demo' | 'extension';
+  acceptedChanges: CorrectionChange[];
+  rejectedChanges: CorrectionChange[];
+  totalCount: number;
   onReset: () => void;
 }) => (
-  <div className="flex-1 flex flex-col items-center justify-between px-4 py-5 h-full">
-    <div className="flex-1 flex flex-col items-center justify-center py-12">
-      <div className="flex flex-col gap-5 items-center">
-        <div className="size-15 rounded-full bg-action-primary-default flex items-center justify-center shrink-0">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+  <div className="flex-1 flex flex-col justify-between h-full overflow-hidden bg-background-page">
+    <div className="flex-1 overflow-y-auto px-4 py-10 flex flex-col gap-10">
+      {/* 상단: 아이콘 + 타이틀 */}
+      <div className="flex flex-col items-center gap-5">
+        <div className="flex items-center justify-center size-25">
+          <svg
+            width="55"
+            height="60"
+            viewBox="0 0 55 60"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {/* 봉투 몸체 */}
+            <rect
+              x="3"
+              y="25"
+              width="49"
+              height="32"
+              rx="5"
+              fill="white"
+              stroke="#7C4DFF"
+              strokeWidth="3.2"
+            />
+            {/* 봉투 플랩 */}
             <path
-              d="M5.25 14L11.375 20.125L22.75 7.875"
-              stroke="white"
-              strokeWidth="2.5"
+              d="M3 30L27.5 46L52 30"
+              stroke="#7C4DFF"
+              strokeWidth="3.2"
               strokeLinecap="round"
               strokeLinejoin="round"
+            />
+            {/* 편지지 */}
+            <rect
+              x="12"
+              y="3"
+              width="31"
+              height="36"
+              rx="4"
+              fill="white"
+              stroke="#7C4DFF"
+              strokeWidth="3.2"
+            />
+            {/* 편지 줄 */}
+            <line
+              x1="18"
+              y1="14"
+              x2="37"
+              y2="14"
+              stroke="#7C4DFF"
+              strokeWidth="3.2"
+              strokeLinecap="round"
+            />
+            <line
+              x1="18"
+              y1="21"
+              x2="37"
+              y2="21"
+              stroke="#9B78FF"
+              strokeWidth="3.2"
+              strokeLinecap="round"
+            />
+            <line
+              x1="18"
+              y1="28"
+              x2="31"
+              y2="28"
+              stroke="#BFA7FF"
+              strokeWidth="3.2"
+              strokeLinecap="round"
             />
           </svg>
         </div>
         <div className="flex flex-col gap-3.5 items-center text-center">
           <p className="text-xl-plus font-semibold leading-7.5 tracking-tight text-text-primary">
-            {mode === 'extension' ? (
+            교정안을 작성칸에 넣어뒀어요.
+          </p>
+          <p className="text-base font-normal leading-6 tracking-tight text-text-secondary text-center">
+            필요한 부분은 작성칸에서
+            <br />한 번 더 다듬어 보낼 수 있어요.
+          </p>
+        </div>
+      </div>
+
+      {/* 교정 요약 + 상세 카드 */}
+      <div className="flex flex-col gap-3.5">
+        {/* 교정 요약 카드 */}
+        <div className="bg-background-surface rounded-2xl p-3 shadow-[0px_2px_4px_0px_rgba(0,0,0,0.08)]">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-base font-semibold leading-6 tracking-tight text-text-primary">
+                교정 요약
+              </span>
+              <span className="text-xs font-semibold leading-4 tracking-tight text-text-brand">
+                총 {totalCount}건
+              </span>
+            </div>
+            <div className="flex gap-2.5 items-center text-center">
+              <div className="flex-1 flex flex-col gap-1 items-center px-2.5 py-2.5 rounded-2xl bg-background-brand-subtle text-text-brand">
+                <span className="text-2xl font-bold leading-8 tracking-tight">
+                  {acceptedChanges.length}
+                </span>
+                <span className="text-xs font-semibold leading-4 tracking-tight">
+                  반영
+                </span>
+              </div>
+              <div className="flex-1 flex flex-col gap-1 items-center px-2.5 py-2.5 rounded-2xl bg-background-subtle text-text-secondary">
+                <span className="text-2xl font-bold leading-8 tracking-tight">
+                  {rejectedChanges.length}
+                </span>
+                <span className="text-xs font-semibold leading-4 tracking-tight whitespace-nowrap">
+                  원문 유지
+                </span>
+              </div>
+              <div className="flex-1 flex flex-col gap-1 items-center px-2.5 py-2.5 rounded-2xl bg-background-subtle text-text-placeholder">
+                <span className="text-2xl font-bold leading-8 tracking-tight">
+                  0
+                </span>
+                <span className="text-xs font-semibold leading-4 tracking-tight">
+                  미검토
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 반영/원문유지 상세 카드 */}
+        <div className="bg-background-surface rounded-2xl p-3 shadow-[0px_2px_8px_0px_rgba(0,0,0,0.08)] flex flex-col gap-4">
+          {/* 반영된 교정 */}
+          {acceptedChanges.length > 0 && (
+            <div className="flex flex-col gap-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-base font-semibold leading-6 tracking-tight text-text-primary">
+                  반영된 교정
+                </span>
+                <span className="text-xs font-semibold leading-4 tracking-tight text-text-brand">
+                  {acceptedChanges.length}건
+                </span>
+              </div>
+              <div className="flex flex-col gap-3">
+                {acceptedChanges.map((c, i) => (
+                  <div key={c.index} className="flex gap-2.5 items-center">
+                    <div className="bg-background-brand flex flex-col items-center justify-center px-2.5 py-0.5 rounded-full shrink-0 min-w-9">
+                      <span className="text-xs font-semibold leading-4 text-text-inverse text-center">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                    </div>
+                    <div className="flex flex-1 gap-1.5 items-center min-w-0">
+                      <p className="flex-1 text-xs font-semibold leading-4 text-text-tertiary truncate min-w-0 max-w-20">
+                        {c.original}
+                      </p>
+                      <span>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="9"
+                          height="11"
+                          viewBox="0 0 9 11"
+                          fill="none"
+                        >
+                          <path
+                            d="M7.75192 4.30125C8.34566 4.69707 8.34566 5.56953 7.75192 5.96535L1.5547 10.0968C0.890147 10.5399 4.75901e-07 10.0635 5.10813e-07 9.26478L8.71999e-07 1.00182C9.06911e-07 0.203122 0.890147 -0.273269 1.5547 0.169768L7.75192 4.30125Z"
+                            fill="#7C4DFF"
+                          />
+                        </svg>
+                      </span>
+                      <p className="flex-1 text-xs font-semibold leading-4 text-text-primary truncate min-w-0">
+                        {c.corrected}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 구분선 */}
+          {acceptedChanges.length > 0 && rejectedChanges.length > 0 && (
+            <div className="h-px w-full bg-border-subtle" />
+          )}
+
+          {/* 원문 유지 */}
+          {rejectedChanges.length > 0 && (
+            <div className="flex flex-col gap-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-base font-semibold leading-6 tracking-tight text-text-primary">
+                  원문 유지
+                </span>
+                <span className="text-xs font-semibold leading-4 tracking-tight text-text-secondary">
+                  {rejectedChanges.length}건
+                </span>
+              </div>
+              <div className="flex flex-col gap-3">
+                {rejectedChanges.map((c, i) => (
+                  <div key={c.index} className="flex gap-2.5 items-center">
+                    <div className="bg-background-muted flex flex-col items-center justify-center px-2.5 py-0.5 rounded-full shrink-0 min-w-9">
+                      <span className="text-xs font-semibold leading-4 text-text-placeholder text-center">
+                        {String(acceptedChanges.length + i + 1).padStart(
+                          2,
+                          '0'
+                        )}
+                      </span>
+                    </div>
+                    <p className="flex-1 text-xs font-semibold leading-4 text-text-placeholder truncate min-w-0">
+                      {c.original}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+
+    {/* 하단 버튼 */}
+    <div className="px-4 pb-3 shrink-0">
+      <ButtonLongV2 onClick={onReset}>새 교정 시작하기</ButtonLongV2>
+    </div>
+  </div>
+);
+
+/** 생성/교정 성공 화면 */
+const PanelSuccessBody = ({
+  mode = 'demo',
+  panelMode,
+  onReset,
+}: {
+  mode?: 'demo' | 'extension';
+  panelMode?: PanelMode;
+  onReset: () => void;
+}) => (
+  <div className="flex-1 flex flex-col items-center justify-between px-4 py-5 h-full">
+    <div className="flex-1 flex flex-col items-center justify-center py-12">
+      <div className="flex flex-col gap-5 items-center">
+        {mode === 'extension' && panelMode !== 'correct' ? (
+          <MailPackingIcon size={88} />
+        ) : (
+          <div className="size-15 rounded-full bg-action-primary-default flex items-center justify-center shrink-0">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <path
+                d="M5.25 14L11.375 20.125L22.75 7.875"
+                stroke="white"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+        )}
+        <div className="flex flex-col gap-3.5 items-center text-center">
+          <p className="text-xl-plus font-semibold leading-7.5 tracking-tight text-text-primary">
+            {panelMode === 'correct' ? (
+              <>
+                다듬은 메일을 작성칸에 넣어뒀어요.
+                <br />
+                확인하고 보내 주세요.
+              </>
+            ) : mode === 'extension' ? (
               '메일 초안이 완성됐어요'
             ) : (
               <>
@@ -337,7 +659,12 @@ const PanelSuccessBody = ({
             )}
           </p>
           <p className="text-base font-normal leading-6 tracking-tight text-text-secondary text-center">
-            {mode === 'extension' ? (
+            {panelMode === 'correct' ? (
+              <>
+                필요한 부분은 작성칸에서
+                <br />한 번 더 다듬어 보낼 수 있어요.
+              </>
+            ) : mode === 'extension' ? (
               <>
                 Gmail 작성 화면에 바로 넣어뒀어요.
                 <br />
@@ -376,36 +703,65 @@ const PanelSuccessBody = ({
 
 export type ErrorVariant = 'generic' | 'session_expired' | 'rate_limited';
 
-/** 에러 variant별 텍스트 설정 */
+/** 에러 variant별 텍스트 설정 — 모드(generate/correct)별 분기 */
+type ErrorConfigEntry = {
+  title: string;
+  descLine1: string;
+  descLine2: string;
+  descLine3?: string;
+};
 const ERROR_CONFIG: Record<
   ErrorVariant,
-  { title: string; descLine1: string; descLine2: string; descLine3?: string }
+  Record<PanelMode, ErrorConfigEntry>
 > = {
   generic: {
-    title: '초안 생성을 완료하지 못했어요',
-    descLine1: '입력한 내용은 그대로 있어요.',
-    descLine2: '잠시 후 다시 시도해 주세요.',
+    generate: {
+      title: '초안 생성을 완료하지 못했어요',
+      descLine1: '입력한 내용은 그대로 있어요.',
+      descLine2: '잠시 후 다시 시도해 주세요.',
+    },
+    correct: {
+      title: '교정을 완료하지 못했어요',
+      descLine1: '처리 중에 일시적인 문제가 생겼어요.',
+      descLine2: '잠시 후 다시 시도해 주세요.',
+    },
   },
   session_expired: {
-    title: '다시 로그인이 필요해요',
-    descLine1: '로그인이 만료되었어요.',
-    descLine2: '로그인 후 이어서 초안을 생성할 수 있습니다.',
+    generate: {
+      title: '다시 로그인이 필요해요',
+      descLine1: '로그인이 만료되었어요.',
+      descLine2: '로그인 후 이어서 초안을 생성할 수 있습니다.',
+    },
+    correct: {
+      title: '다시 로그인이 필요해요',
+      descLine1: '로그인이 만료되었어요.',
+      descLine2: '로그인 후 이어서 교정할 수 있습니다.',
+    },
   },
   rate_limited: {
-    title: '요청이 잠시 제한되었어요',
-    descLine1: '짧은 시간에 요청이 몰려 잠시 멈췄어요.',
-    descLine2: '입력한 내용은 그대로 있고,',
-    descLine3: '시간이 지나면 다시 시도할 수 있어요.',
+    generate: {
+      title: '요청이 잠시 제한되었어요',
+      descLine1: '짧은 시간에 요청이 몰려 잠시 멈췄어요.',
+      descLine2: '입력한 내용은 그대로 있고,',
+      descLine3: '시간이 지나면 다시 시도할 수 있어요.',
+    },
+    correct: {
+      title: '한도가 초과되었어요',
+      descLine1: '잠시 후 재시도 해주세요.',
+      descLine2: '',
+    },
   },
 };
 
 /** 생성 실패 화면 */
 const PanelErrorBody = ({
   variant = 'generic',
+  panelMode = 'generate',
   onRetry,
   onGoToLogin,
 }: {
   variant?: ErrorVariant;
+  panelMode?: PanelMode;
   onRetry: () => void;
   onGoToLogin?: () => void;
 }) => {
@@ -428,7 +784,8 @@ const PanelErrorBody = ({
     return () => clearInterval(timer);
   }, [variant]);
 
-  const { title, descLine1, descLine2, descLine3 } = ERROR_CONFIG[variant];
+  const { title, descLine1, descLine2, descLine3 } =
+    ERROR_CONFIG[variant][panelMode];
 
   // CTA 버튼 설정
   const isCounting = variant === 'rate_limited' && countdown > 0;
@@ -475,8 +832,511 @@ const PanelErrorBody = ({
   );
 };
 
+// =============================================================
+// 모드 스위치 (생성하기 / 교정하기)
+// =============================================================
+
+const ModeSwitch = ({
+  mode,
+  onChange,
+}: {
+  mode: PanelMode;
+  onChange: (m: PanelMode) => void;
+}) => (
+  <div className="bg-background-muted rounded-2xl px-1 py-1 flex gap-1 shrink-0">
+    {(['generate', 'correct'] as PanelMode[]).map((m) => (
+      <button
+        key={m}
+        type="button"
+        onClick={() => onChange(m)}
+        className={`flex-1 py-2.5 rounded-xl text-sm font-semibold leading-5 tracking-tight transition-colors cursor-pointer
+          ${mode === m ? 'bg-background-surface text-text-brand' : 'text-text-placeholder'}`}
+      >
+        {m === 'generate' ? '생성하기' : '교정하기'}
+      </button>
+    ))}
+  </div>
+);
+
+// =============================================================
+// 교정 첫 안내 배너
+// =============================================================
+
+const CorrectionHint = ({ onDismiss }: { onDismiss: () => void }) => (
+  <div className="bg-background-info-subtle flex gap-3 items-center px-2.5 py-2.5 rounded-2xl shrink-0">
+    <div className="flex flex-1 gap-3 items-center min-w-0">
+      <svg
+        className="shrink-0 size-6 text-icon-info"
+        viewBox="0 0 24 24"
+        fill="none"
+      >
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 4.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm-1 4a1 1 0 0 1 2 0v5a1 1 0 0 1-2 0v-5z"
+          fill="currentColor"
+        />
+      </svg>
+      <div className="flex flex-col gap-1 min-w-0">
+        <p className="text-2xs font-bold leading-3.5 tracking-tight text-text-info">
+          작성한 메일을 받는 사람과 목적에 맞게 다듬어드려요.
+        </p>
+        <p className="text-2xs font-normal leading-3.5 tracking-tight text-text-info">
+          수신자 선택 후, 교정하고 싶은 메일 원문을 입력해주세요.
+        </p>
+      </div>
+    </div>
+    <button
+      type="button"
+      onClick={onDismiss}
+      className="shrink-0 size-6 flex items-center justify-center cursor-pointer text-icon-info"
+      aria-label="닫기"
+    >
+      <svg viewBox="0 0 24 24" fill="none" className="size-3.5">
+        <path
+          d="M18 6L6 18M6 6l12 12"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  </div>
+);
+
+// =============================================================
+// 교정 결과 리뷰 패널
+// =============================================================
+
+type DecisionMap = Record<number, 'accepted' | 'rejected'>;
+
+const LABEL_META: Record<
+  CorrectionLabelType,
+  { text: string; className: string }
+> = {
+  AUTO: {
+    text: '필수',
+    className:
+      'bg-background-brand-subtle border border-border-focus text-text-brand',
+  },
+  SUGGEST: {
+    text: '권장',
+    className:
+      'bg-background-surface border border-border-brand text-text-brand-strong',
+  },
+  STYLE: {
+    text: '선택',
+    className:
+      'bg-background-subtle border border-border-strong text-text-tertiary',
+  },
+};
+
+const RedoIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+  >
+    <path
+      d="M10 9.33317L13.3333 5.99984L10 2.6665"
+      stroke="#7C4DFF"
+      stroke-width="1.33333"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M13.3337 6H6.33366C5.3612 6 4.42857 6.38631 3.74093 7.07394C3.0533 7.76157 2.66699 8.69421 2.66699 9.66667C2.66699 10.1482 2.76183 10.625 2.9461 11.0698C3.13037 11.5147 3.40045 11.9189 3.74093 12.2594C4.42857 12.947 5.3612 13.3333 6.33366 13.3333H8.66699"
+      stroke="#7C4DFF"
+      stroke-width="1.33333"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+);
+
+const CorrectionCard = ({
+  change,
+  index,
+  decision,
+  onDecide,
+  onUndo,
+  meaningDamage,
+  onToggleMeaningDamage,
+}: {
+  change: CorrectionChange;
+  index: number;
+  decision: 'accepted' | 'rejected' | undefined;
+  onDecide: (idx: number, d: 'accepted' | 'rejected') => void;
+  onUndo: (idx: number) => void;
+  meaningDamage?: boolean;
+  onToggleMeaningDamage?: (idx: number) => void;
+}) => {
+  const label = LABEL_META[change.label];
+
+  if (decision !== undefined) {
+    const previewText =
+      decision === 'accepted' ? change.corrected : change.original;
+    const chipLabel = decision === 'accepted' ? '교정' : '원문';
+    return (
+      <div className="group cursor-pointer hover:bg-background-brand-subtle border border-border-inverse hover:border-border-brand flex gap-3 items-center overflow-hidden p-3 rounded-lg shadow-[0px_2px_8px_0px_rgba(0,0,0,0.08)] w-full">
+        <div className="flex flex-1 gap-2 items-center min-w-0">
+          <div className="bg-background-brand flex flex-col items-center justify-center px-2.5 py-0.5 rounded-full shrink-0 w-9">
+            <span className="text-xs font-semibold leading-4 text-text-inverse text-center">
+              {String(index + 1).padStart(2, '0')}
+            </span>
+          </div>
+          <div className="flex flex-1 gap-1.5 items-center min-w-0">
+            <span
+              className={`flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-semibold leading-4 shrink-0 group-hover:text-text-brand group-hover:bg-background-brand-100  ${decision === 'accepted' ? 'bg-background-brand-subtle text-text-brand' : 'text-text-placeholder bg-background-muted'}`}
+            >
+              {chipLabel}
+            </span>
+            <p className="flex-1 text-xs font-semibold leading-4 text-text-primary truncate min-w-0">
+              {previewText}
+            </p>
+          </div>
+        </div>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-3 shrink-0">
+          {decision === 'rejected' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleMeaningDamage?.(change.index);
+              }}
+              className={`cursor-pointer shrink-0 transition-opacity ${meaningDamage ? 'opacity-100' : ''}`}
+              aria-label="의미훼손 의심 표시"
+              title="의미훼손 의심"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill={meaningDamage ? 'rgba(124,77,255,0.15)' : 'none'}
+              >
+                <path
+                  d="M14.4866 12L9.15329 2.66665C9.037 2.46146 8.86836 2.29078 8.66457 2.17203C8.46078 2.05329 8.22915 1.99072 7.99329 1.99072C7.75743 1.99072 7.52579 2.05329 7.322 2.17203C7.11822 2.29078 6.94958 2.46146 6.83329 2.66665L1.49995 12C1.38241 12.2036 1.32077 12.4346 1.32129 12.6697C1.32181 12.9047 1.38447 13.1355 1.50292 13.3385C1.62136 13.5416 1.79138 13.7097 1.99575 13.8259C2.20011 13.942 2.43156 14.0021 2.66662 14H13.3333C13.5672 13.9997 13.797 13.938 13.9995 13.8208C14.202 13.7037 14.3701 13.5354 14.487 13.3327C14.6038 13.1301 14.6653 12.9002 14.6653 12.6663C14.6652 12.4324 14.6036 12.2026 14.4866 12Z"
+                  stroke="#7C4DFF"
+                  strokeWidth="1.33333"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M8 6V8.66667"
+                  stroke="#7C4DFF"
+                  strokeWidth="1.33333"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M8 11.3335H8.00667"
+                  stroke="#7C4DFF"
+                  strokeWidth="1.33333"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onUndo(change.index)}
+            className="text-text-tertiary hover:text-text-brand cursor-pointer shrink-0"
+            aria-label="되돌리기"
+          >
+            <RedoIcon />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-background-surface flex flex-col gap-4 items-start overflow-hidden p-3 rounded-lg shadow-[0px_2px_8px_0px_rgba(0,0,0,0.08)] w-full">
+      {/* 헤더: 번호 + 라벨 */}
+      <div className="flex items-center w-full">
+        <div className="flex flex-1 gap-1 items-center min-w-0">
+          <div className="bg-background-brand flex flex-col items-center justify-center px-2.5 py-0.5 rounded-full shrink-0">
+            <span className="text-xs font-semibold leading-4 text-text-inverse w-full text-center">
+              {String(index + 1).padStart(2, '0')}
+            </span>
+          </div>
+          <span
+            className={`flex items-center justify-center h-5 px-2 py-0.5 rounded-full text-xs font-semibold leading-4 shrink-0 ${label.className}`}
+          >
+            {label.text}
+          </span>
+        </div>
+      </div>
+
+      {/* 원문 → 교정안 델타 */}
+      <div className="bg-background-subtle border border-border-subtle flex flex-col gap-3 items-start justify-center p-3.5 rounded-xl w-full">
+        <div className="flex flex-col gap-1 w-full">
+          <p className="text-xs font-semibold leading-4 text-text-tertiary">
+            원문
+          </p>
+          <p className="text-xs font-normal leading-4.5 text-text-tertiary">
+            {change.original}
+          </p>
+        </div>
+        <div className="w-full h-px bg-border-subtle" />
+        <div className="flex flex-col gap-1 w-full">
+          <p className="text-xs font-semibold leading-4 text-text-tertiary">
+            교정안
+          </p>
+          <p className="text-sm font-semibold leading-5 text-text-primary">
+            {change.corrected}
+          </p>
+        </div>
+      </div>
+
+      {/* 이유 */}
+      <div className="flex gap-2 items-start py-0.5 w-full">
+        <span className="bg-background-muted flex items-center justify-center px-2 py-1 rounded-md shrink-0 text-xs font-semibold leading-4 text-text-secondary">
+          이유
+        </span>
+        <p className="flex-1 text-xs font-normal leading-4.5 text-text-secondary min-w-0">
+          {change.reason}
+        </p>
+      </div>
+
+      {/* 거절 / 수락 버튼 */}
+      <div className="flex gap-2 items-end justify-center w-full">
+        <button
+          type="button"
+          onClick={() => onDecide(change.index, 'rejected')}
+          className="flex flex-1 items-center justify-center px-4 py-1.5 rounded-lg border border-border-default bg-background-surface text-text-secondary text-xs font-semibold leading-4 transition-colors"
+        >
+          거절
+        </button>
+        <button
+          type="button"
+          onClick={() => onDecide(change.index, 'accepted')}
+          className="flex flex-1 items-center justify-center px-4 py-1.5 rounded-lg border border-background-brand bg-background-brand text-text-inverse text-xs font-semibold leading-4 transition-colors"
+        >
+          수락
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const PanelCorrectionReviewBody = ({
+  changes,
+  originalEmail,
+  receiver,
+  purpose,
+  onComplete,
+}: {
+  changes: CorrectionChange[];
+  originalEmail: string;
+  receiver: ReceiverType;
+  purpose: PurposeType;
+  onComplete: (
+    finalContent: string,
+    acceptedChanges: CorrectionChange[],
+    rejectedItems: CorrectionsRejectionItem[]
+  ) => void;
+}) => {
+  const [decisions, setDecisions] = useState<DecisionMap>({});
+  // 의미훼손 의심 플래그 — 거절된 항목의 index set
+  const [meaningDamageSet, setMeaningDamageSet] = useState<Set<number>>(
+    new Set()
+  );
+
+  const decide = useCallback((idx: number, d: 'accepted' | 'rejected') => {
+    setDecisions((prev) => ({ ...prev, [idx]: d }));
+  }, []);
+
+  const undo = useCallback((idx: number) => {
+    setDecisions((prev) => {
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+    setMeaningDamageSet((prev) => {
+      const next = new Set(prev);
+      next.delete(idx);
+      return next;
+    });
+  }, []);
+
+  const toggleMeaningDamage = useCallback((idx: number) => {
+    setMeaningDamageSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }, []);
+
+  const acceptAll = useCallback(() => {
+    setDecisions((prev) => {
+      const next = { ...prev };
+      changes.forEach((c) => {
+        if (!next[c.index]) next[c.index] = 'accepted';
+      });
+      return next;
+    });
+  }, [changes]);
+
+  const acceptedCount = Object.values(decisions).filter(
+    (d) => d === 'accepted'
+  ).length;
+  const rejectedCount = Object.values(decisions).filter(
+    (d) => d === 'rejected'
+  ).length;
+  const pendingCount = changes.length - acceptedCount - rejectedCount;
+  const reviewedCount = acceptedCount + rejectedCount;
+  const progress =
+    changes.length > 0 ? (reviewedCount / changes.length) * 100 : 0;
+
+  const handleComplete = useCallback(() => {
+    // 수락 항목만 start 기준 역순으로 적용 (오프셋 밀림 방지)
+    const accepted = changes
+      .filter((c) => decisions[c.index] !== 'rejected')
+      .sort((a, b) => b.start - a.start);
+
+    console.error(
+      '[ToneFit DEBUG] originalEmail:',
+      JSON.stringify(originalEmail)
+    );
+    console.error(
+      '[ToneFit DEBUG] originalEmail 줄바꿈 수:',
+      (originalEmail.match(/\n/g) ?? []).length
+    );
+    accepted.forEach((c) => {
+      console.error(
+        `[ToneFit DEBUG] 수락 항목 [${c.index}] start=${c.start} end=${c.end}`
+      );
+      console.error(`  original: ${JSON.stringify(c.original)}`);
+      console.error(`  corrected: ${JSON.stringify(c.corrected)}`);
+    });
+
+    let result = originalEmail;
+    for (const c of accepted) {
+      result = result.slice(0, c.start) + c.corrected + result.slice(c.end);
+    }
+
+    console.error('[ToneFit DEBUG] finalContent:', JSON.stringify(result));
+    console.error(
+      '[ToneFit DEBUG] finalContent 줄바꿈 수:',
+      (result.match(/\n/g) ?? []).length
+    );
+
+    const rejectedItems: CorrectionsRejectionItem[] = changes
+      .filter((c) => decisions[c.index] === 'rejected')
+      .map((c) => ({
+        label: c.label,
+        original_phrase: c.original,
+        corrected_phrase: c.corrected,
+        meaning_damage_suspected: meaningDamageSet.has(c.index) ? true : null,
+      }));
+
+    // receiver/purpose는 부모가 이미 알고 있으므로 onComplete에서 처리
+    void receiver;
+    void purpose;
+
+    const acceptedChanges = changes.filter(
+      (c) => decisions[c.index] !== 'rejected'
+    );
+    onComplete(result, acceptedChanges, rejectedItems);
+  }, [
+    changes,
+    decisions,
+    meaningDamageSet,
+    originalEmail,
+    onComplete,
+    receiver,
+    purpose,
+  ]);
+
+  return (
+    <div className="flex flex-col h-full relative bg-background-page">
+      {/* 헤더 */}
+      <div className="flex flex-col gap-2.5 px-4 pt-3 shrink-0">
+        {/* 진행 바 */}
+        <div className="bg-background-brand-subtle h-3 rounded-sm w-full overflow-hidden">
+          <div
+            className="bg-background-brand h-3 rounded-sm transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        {/* 타이틀 + 카운터 */}
+        <div className="flex flex-col gap-2.5">
+          <div className="flex gap-2.5 items-center py-2.5">
+            <span className="text-lg font-semibold leading-6.5 tracking-tight text-text-primary">
+              교정 내역
+            </span>
+            <span className="text-lg font-semibold leading-6.5 tracking-tight text-text-brand">
+              {changes.length}건
+            </span>
+          </div>
+          <div className="flex items-center justify-between h-9">
+            <div className="flex gap-4 items-center">
+              <span className="text-sm font-semibold leading-5 tracking-tight text-text-placeholder">
+                수락 {acceptedCount}
+              </span>
+              <span className="text-sm font-semibold leading-5 tracking-tight text-text-placeholder">
+                거절 {rejectedCount}
+              </span>
+              <span className="text-sm font-semibold leading-5 tracking-tight text-text-placeholder">
+                미검토 {pendingCount}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={acceptAll}
+              className="bg-background-brand flex items-center justify-center px-2 py-2 rounded-md"
+            >
+              <span className="text-xs font-semibold leading-4 text-text-inverse whitespace-nowrap">
+                일괄 수용
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 카드 목록 */}
+      <div className="flex-1 overflow-y-auto px-4 py-5">
+        <div className="flex flex-col gap-2.5">
+          {changes.map((change, i) => (
+            <CorrectionCard
+              key={change.index}
+              change={change}
+              index={i}
+              decision={decisions[change.index]}
+              onDecide={decide}
+              onUndo={undo}
+              meaningDamage={meaningDamageSet.has(change.index)}
+              onToggleMeaningDamage={toggleMeaningDamage}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* 하단 그라디언트 + 완료 버튼 */}
+      <div className="absolute bottom-0 left-0 right-0 pointer-events-none h-72 bg-gradient-to-b from-transparent to-background-page" />
+      <div className="relative z-10 px-4 pb-4 shrink-0">
+        <ButtonLongV2 onClick={handleComplete} disabled={pendingCount > 0}>
+          완료
+        </ButtonLongV2>
+      </div>
+    </div>
+  );
+};
+
+// =============================================================
+// 입력 폼 패널 본문
+// =============================================================
+
 /** 입력 폼 패널 본문 */
 const PanelBody = ({
+  panelMode,
   receiver,
   setReceiver,
   purpose,
@@ -487,7 +1347,12 @@ const PanelBody = ({
   onGenerate,
   tooltipSlot,
   onChipSelect,
+  showCorrectionHint,
+  onDismissCorrectionHint,
+  onModeChange,
+  mode,
 }: {
+  panelMode: PanelMode;
   receiver: ReceiverType | null;
   setReceiver: (v: ReceiverType | null) => void;
   purpose: PurposeType | null;
@@ -498,88 +1363,150 @@ const PanelBody = ({
   onGenerate: () => void;
   tooltipSlot?: ReactNode;
   onChipSelect?: () => void;
+  showCorrectionHint: boolean;
+  onDismissCorrectionHint: () => void;
+  onModeChange: (m: PanelMode) => void;
+  mode?: 'demo' | 'extension';
 }) => {
   const labelClass =
     'text-base font-semibold leading-6 tracking-tight text-text-primary';
 
   return (
-    <div className="flex-1 flex flex-col px-4 py-5 gap-5 justify-between h-full">
-      <div className="flex flex-col gap-8">
-        {/* 툴팁 슬롯 */}
-        {tooltipSlot}
+    <div className="flex-1 flex flex-col px-2 py-2 gap-6 justify-between h-full overflow-y-auto">
+      <div className="panel__top flex flex-col gap-4">
+        {mode !== 'demo' && (
+          <div className="panel__header flex flex-col gap-4">
+            {/* 모드 스위치 */}
+            <ModeSwitch mode={panelMode} onChange={onModeChange} />
 
-        {/* 수신자 유형 */}
-        <div className="flex flex-col gap-4">
-          <p className={labelClass}>수신자 유형 선택</p>
-          <div className="grid grid-cols-4 gap-1">
-            {RECEIVER_OPTIONS.map(({ value, label }) => (
-              <ChipV2
-                key={value}
-                selected={receiver === value}
-                onClick={() => {
-                  setReceiver(receiver === value ? null : value);
-                  onChipSelect?.();
-                }}
-              >
-                {label}
-              </ChipV2>
-            ))}
+            {/* 교정 첫 안내 배너 */}
+            {panelMode === 'correct' && showCorrectionHint && (
+              <CorrectionHint onDismiss={onDismissCorrectionHint} />
+            )}
+
+            {/* 툴팁 슬롯 (생성 모드 전용) */}
+            {panelMode === 'generate' && tooltipSlot}
           </div>
-        </div>
+        )}
 
-        {/* 목적 */}
-        <div className="flex flex-col gap-4">
-          <p className={labelClass}>목적 선택</p>
-          <div className="grid grid-cols-4 gap-2">
-            {PURPOSE_OPTIONS.map(({ value, label }) => (
-              <ChipV2
-                key={value}
-                selected={purpose === value}
-                onClick={() => {
-                  setPurpose(purpose === value ? null : value);
-                  onChipSelect?.();
-                }}
-              >
-                {label}
-              </ChipV2>
-            ))}
-          </div>
-        </div>
-
-        {/* 이메일 내용 입력 */}
-        <div className="flex flex-col gap-4 flex-1">
-          <p className={labelClass}>이메일 내용 입력</p>
-          <div className="flex flex-col gap-1 flex-1">
-            <div className="relative bg-background-surface border border-border-default rounded-xl p-2.5 flex-1 min-h-[218px]">
-              <textarea
-                data-panel-input="email-brief"
-                className="w-full h-full resize-none text-sm font-normal leading-5.5 tracking-tight text-text-secondary placeholder:text-text-placeholder bg-transparent outline-none"
-                placeholder="어떤 이메일을 작성하고 싶으신가요?"
-                value={emailText}
-                onChange={(e) => setEmailText(e.target.value)}
-                rows={5}
-              />
-              <div className="absolute right-1 top-2.5 w-1 h-8 bg-background-muted rounded-full" />
-            </div>
-            <div className="flex justify-end">
-              <span
-                className={`text-xs font-normal leading-4.5 tracking-tight ${
-                  emailText.length > EMAIL_MAX
-                    ? 'text-text-danger'
-                    : 'text-text-placeholder'
-                }`}
-              >
-                {emailText.length} / {EMAIL_MAX}자
-              </span>
+        <div className="flex flex-col gap-6 p-2">
+          {/* 수신자 유형 */}
+          <div className="flex flex-col gap-4">
+            <p className={labelClass}>수신자 유형 선택</p>
+            <div className="grid grid-cols-4 gap-1">
+              {RECEIVER_OPTIONS.map(({ value, label }) => (
+                <ChipV2
+                  key={value}
+                  selected={receiver === value}
+                  onClick={() => {
+                    setReceiver(receiver === value ? null : value);
+                    onChipSelect?.();
+                    onDismissCorrectionHint();
+                  }}
+                >
+                  {label}
+                </ChipV2>
+              ))}
             </div>
           </div>
+
+          {/* 목적 */}
+          <div className="flex flex-col gap-4 py-4">
+            <p className={labelClass}>목적 선택</p>
+            <div className="grid grid-cols-4 gap-2">
+              {PURPOSE_OPTIONS.map(({ value, label }) => (
+                <ChipV2
+                  key={value}
+                  selected={purpose === value}
+                  onClick={() => {
+                    setPurpose(purpose === value ? null : value);
+                    onChipSelect?.();
+                    onDismissCorrectionHint();
+                  }}
+                >
+                  {label}
+                </ChipV2>
+              ))}
+            </div>
+          </div>
+
+          {/* 이메일 내용 입력 — 생성 모드만 */}
+          {panelMode === 'generate' && (
+            <div className="flex flex-col gap-4 flex-1">
+              <p className={labelClass}>메일 상황 입력</p>
+              <div className="flex flex-col gap-1 flex-1">
+                <div className="relative bg-background-surface border border-border-default rounded-xl p-2.5 flex-1 min-h-[218px]">
+                  <textarea
+                    data-panel-input="email-brief"
+                    className="w-full h-full resize-none text-sm font-normal leading-5.5 tracking-tight text-text-secondary placeholder:text-text-placeholder bg-transparent outline-none"
+                    placeholder="ex: 김ㅇㅇ 팀장님에게 하반기 실적 보고서를 전달하고 싶어요."
+                    value={emailText}
+                    onChange={(e) => {
+                      setEmailText(e.target.value);
+                    }}
+                    rows={5}
+                  />
+                  <div className="absolute right-1 top-2.5 w-1 h-8 bg-background-muted rounded-full" />
+                </div>
+                <div className="flex justify-end">
+                  <span
+                    className={`text-xs font-normal leading-4.5 tracking-tight ${
+                      emailText.length > EMAIL_MAX
+                        ? 'text-text-danger'
+                        : 'text-text-placeholder'
+                    }`}
+                  >
+                    {emailText.length} / {EMAIL_MAX}자
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* CTA 버튼 */}
-      <div className="shrink-0">
+      <div className="shrink-0 flex flex-col gap-4 p-2">
+        {panelMode === 'generate' && (
+          <p className="flex gap-1 items-center justify-center text-text-placeholder text-xs leading-4.5 tracking-tight">
+            <span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+              >
+                <path
+                  d="M6.99984 12.8333C10.2215 12.8333 12.8332 10.2216 12.8332 6.99996C12.8332 3.7783 10.2215 1.16663 6.99984 1.16663C3.77818 1.16663 1.1665 3.7783 1.1665 6.99996C1.1665 10.2216 3.77818 12.8333 6.99984 12.8333Z"
+                  stroke="#9AA1B2"
+                  stroke-width="1.16667"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M7 9.33333V7"
+                  stroke="#9AA1B2"
+                  stroke-width="1.16667"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M7 4.66663H7.00583"
+                  stroke="#9AA1B2"
+                  stroke-width="1.16667"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </span>
+            <span>
+              초안은 Gmail 작성칸에 채워지고, 보내기 전 수정할 수 있어요.
+            </span>
+          </p>
+        )}
         <ButtonLongV2 disabled={!canGenerate} onClick={onGenerate}>
-          초안 생성하기
+          {panelMode === 'correct' ? '교정 시작하기' : '초안 생성하기'}
         </ButtonLongV2>
       </div>
     </div>
@@ -631,26 +1558,67 @@ const ToneFitPanel = ({
   onError,
   errorVariant = 'generic',
   onGoToLogin,
+  onCorrectionsRejected,
   devForceView,
+  devPanelMode: devPanelModeProp,
+  initialPanelMode,
+  onPreCheck,
 }: ToneFitPanelProps) => {
+  const CORRECTION_HINT_KEY = 'tonefit_correction_hint_dismissed';
+  const [panelMode, setPanelMode] = useState<PanelMode>(
+    initialPanelMode ?? 'generate'
+  );
+  const [showCorrectionHint, setShowCorrectionHint] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [receiver, setReceiver] = useState<ReceiverType | null>(null);
   const [purpose, setPurpose] = useState<PurposeType | null>(null);
   const [emailText, setEmailText] = useState('');
   const [view, setView] = useState<PanelView>('input');
+  const [correctionSession, setCorrectionSession] = useState<Extract<
+    GenerateResult,
+    { type: 'correction' }
+  > | null>(null);
+  const [correctionSummary, setCorrectionSummary] = useState<{
+    acceptedChanges: CorrectionChange[];
+    rejectedChanges: CorrectionChange[];
+    totalCount: number;
+  } | null>(null);
   const cancelledRef = useRef(false);
+
+  /** 모드 전환 — 교정 모드 최초 진입 시에만 안내 배너 표시 */
+  const handleModeChange = useCallback(
+    (m: PanelMode) => {
+      setPanelMode(m);
+      if (m === 'correct') {
+        const dismissed = localStorage.getItem(CORRECTION_HINT_KEY) === 'true';
+        if (!dismissed) setShowCorrectionHint(true);
+      }
+    },
+    [CORRECTION_HINT_KEY]
+  );
 
   /**
    * 폼 입력 조건 (잔여 횟수 제외)
-   * 버튼의 disabled 여부를 결정 — 횟수가 소진돼도 클릭은 가능해야 함
+   * 교정 모드: 수신자 + 목적만 필요 (내용은 Gmail에서 자동 읽기)
+   * 생성 모드: 수신자 + 목적 + 이메일 내용 필요
    */
   const canGenerateForm =
-    !!receiver &&
-    !!purpose &&
-    emailText.trim().length >= 10 &&
-    emailText.length <= EMAIL_MAX &&
-    !isOnlyJamoOrSpaces(emailText);
+    panelMode === 'correct'
+      ? !!receiver && !!purpose
+      : !!receiver &&
+        !!purpose &&
+        emailText.trim().length >= 10 &&
+        emailText.length <= EMAIL_MAX &&
+        !isOnlyJamoOrSpaces(emailText);
 
-  /** 생성 요청 — 횟수 소진 시 onExhausted 호출, 정상 시 로딩 → 성공/실패 전환 */
+  const showToast = useCallback((message: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMessage(message);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 2500);
+  }, []);
+
+  /** 생성/교정 요청 — 횟수 소진 시 onExhausted 호출, 정상 시 로딩 → 성공/실패 전환 */
   const handleGenerate = useCallback(async () => {
     if (!canGenerateForm || !receiver || !purpose) return;
 
@@ -661,14 +1629,37 @@ const ToneFitPanel = ({
     }
 
     cancelledRef.current = false;
+
+    // 교정 모드: loading 전에 사전 검증 (본문 길이 등)
+    if (panelMode === 'correct' && onPreCheck) {
+      try {
+        await onPreCheck();
+      } catch (err) {
+        if ((err as { _tooShort?: boolean })?._tooShort) {
+          showToast('메일 작성 후 시도해주세요.');
+        }
+        return;
+      }
+    }
+
     setView('loading');
     try {
-      const result = await onRequest({ receiver, purpose, emailText });
-      if (cancelledRef.current) return; // 취소된 경우 결과 무시
-      setView('success');
-      onSuccess(result.subject, result.content);
+      const result = await onRequest({
+        receiver,
+        purpose,
+        emailText,
+        correctionMode: panelMode === 'correct',
+      });
+      if (cancelledRef.current) return;
+      if (result.type === 'correction') {
+        setCorrectionSession(result);
+        setView('correction-review');
+      } else {
+        setView('success');
+        onSuccess(result.subject, result.content);
+      }
     } catch (err) {
-      if (cancelledRef.current) return; // 취소된 경우 에러 무시
+      if (cancelledRef.current) return;
       onError?.(err);
       setView('error');
     }
@@ -677,11 +1668,14 @@ const ToneFitPanel = ({
     receiver,
     purpose,
     emailText,
+    panelMode,
     remainingCount,
     onRequest,
     onSuccess,
     onExhausted,
     onError,
+    onPreCheck,
+    showToast,
   ]);
 
   /** 로딩 중 취소 → 입력값 유지하고 input으로 복귀 */
@@ -691,8 +1685,36 @@ const ToneFitPanel = ({
     onCancel?.();
   }, [onCancel]);
 
+  /** 교정 리뷰 완료 — 최종 내용 삽입 + 거절 항목 전송 */
+  const handleCorrectionComplete = useCallback(
+    (
+      finalContent: string,
+      acceptedChanges: CorrectionChange[],
+      rejectedItems: CorrectionsRejectionItem[]
+    ) => {
+      onSuccess('', finalContent);
+      if (rejectedItems.length > 0 && correctionSession) {
+        onCorrectionsRejected?.(
+          rejectedItems,
+          correctionSession.receiver,
+          correctionSession.purpose
+        );
+      }
+      const totalCount = correctionSession?.changes.length ?? 0;
+      const rejectedChanges = (correctionSession?.changes ?? []).filter((c) =>
+        rejectedItems.some((r) => r.original_phrase === c.original)
+      );
+      setCorrectionSummary({ acceptedChanges, rejectedChanges, totalCount });
+      setCorrectionSession(null);
+      setView('success');
+    },
+    [onSuccess, onCorrectionsRejected, correctionSession]
+  );
+
   /** 성공 화면 → 입력 초기화 */
   const handleReset = () => {
+    setCorrectionSession(null);
+    setCorrectionSummary(null);
     setView('input');
     setReceiver(null);
     setPurpose(null);
@@ -718,6 +1740,7 @@ const ToneFitPanel = ({
   }, [handleGenerate]);
 
   const activeView = devForceView ?? view;
+  const activePanelMode = devPanelModeProp ?? panelMode;
 
   const receiverLabel =
     RECEIVER_OPTIONS.find((o) => o.value === receiver)?.label ?? '상사';
@@ -735,21 +1758,55 @@ const ToneFitPanel = ({
           receiverLabel={receiverLabel}
           purposeLabel={purposeLabel}
           onCancel={onCancel ? handleCancel : undefined}
+          message={
+            activePanelMode === 'correct'
+              ? '문장의 흐름을 살펴보고 있어요.'
+              : undefined
+          }
         />
       )}
-      {activeView === 'success' && (
-        <PanelSuccessBody mode={mode} onReset={handleReset} />
-      )}
+      {activeView === 'success' &&
+        (activePanelMode === 'correct' ? (
+          <PanelCorrectionSuccessBody
+            acceptedChanges={
+              correctionSummary?.acceptedChanges ?? DEV_MOCK_CHANGES.slice(0, 2)
+            }
+            rejectedChanges={
+              correctionSummary?.rejectedChanges ?? DEV_MOCK_CHANGES.slice(2)
+            }
+            totalCount={
+              correctionSummary?.totalCount ?? DEV_MOCK_CHANGES.length
+            }
+            onReset={handleReset}
+          />
+        ) : (
+          <PanelSuccessBody
+            mode={mode}
+            panelMode={activePanelMode}
+            onReset={handleReset}
+          />
+        ))}
       {activeView === 'error' && (
         <PanelErrorBody
-          key={errorVariant}
+          key={`${errorVariant}-${activePanelMode}`}
           variant={errorVariant}
+          panelMode={activePanelMode}
           onRetry={handleRetry}
           onGoToLogin={onGoToLogin}
         />
       )}
+      {activeView === 'correction-review' && (
+        <PanelCorrectionReviewBody
+          changes={correctionSession?.changes ?? DEV_MOCK_CHANGES}
+          originalEmail={correctionSession?.originalEmail ?? DEV_MOCK_ORIGINAL}
+          receiver={correctionSession?.receiver ?? 'DIRECT_SUPERVISOR'}
+          purpose={correctionSession?.purpose ?? 'REPORT'}
+          onComplete={handleCorrectionComplete}
+        />
+      )}
       {activeView === 'input' && (
         <PanelBody
+          panelMode={panelMode}
           receiver={receiver}
           setReceiver={setReceiver}
           purpose={purpose}
@@ -760,7 +1817,21 @@ const ToneFitPanel = ({
           onGenerate={handleGenerate}
           tooltipSlot={tooltipSlot}
           onChipSelect={onChipSelect}
+          showCorrectionHint={showCorrectionHint}
+          onDismissCorrectionHint={() => {
+            setShowCorrectionHint(false);
+            localStorage.setItem(CORRECTION_HINT_KEY, 'true');
+          }}
+          onModeChange={handleModeChange}
+          mode={mode}
         />
+      )}
+
+      {/* 토스트 */}
+      {toastMessage && (
+        <div className="absolute bottom-[78px] left-1/2 -translate-x-1/2 bg-background-inverse text-text-inverse text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg whitespace-nowrap pointer-events-none z-50">
+          {toastMessage}
+        </div>
       )}
     </>
   );
