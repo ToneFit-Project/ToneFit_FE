@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import Header from './Header';
 import Footer from './Footer';
@@ -24,6 +25,16 @@ interface TermsLayoutProps {
  * - showAgreementButton=true 시 하단 "약관 동의" 버튼 노출
  */
 const TermsLayout = ({ title, description, children }: TermsLayoutProps) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(false);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+    setIsAtBottom(atBottom);
+  };
+
   return (
     <div
       className="min-h-screen flex flex-col"
@@ -54,17 +65,22 @@ const TermsLayout = ({ title, description, children }: TermsLayoutProps) => {
 
           {/* 본문 스크롤 영역 */}
           <div className="relative border border-border-default rounded-xl flex-1 min-h-0 overflow-hidden h-full">
-            <div className="h-full overflow-y-auto p-2.5 pr-3 scrollbar-thin">
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              className="h-full overflow-y-auto p-2.5 pr-3 scrollbar-thin"
+            >
               <div className="text-sm font-normal leading-[22px] tracking-tight text-text-secondary whitespace-pre-wrap break-keep">
                 {children}
               </div>
             </div>
-            {/* 하단 그라데이션 페이드 */}
+            {/* 하단 그라데이션 페이드 — 하단 도달 시 숨김 */}
             <div
-              className="absolute bottom-0 left-0 right-0 h-24 pointer-events-none"
+              className="absolute bottom-0 left-0 right-0 h-24 pointer-events-none transition-opacity duration-300"
               style={{
                 background:
                   'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 100%)',
+                opacity: isAtBottom ? 0 : 1,
               }}
             />
           </div>
