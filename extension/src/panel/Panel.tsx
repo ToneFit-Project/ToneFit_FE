@@ -19,12 +19,17 @@ import {
   postGeneration,
   postCorrection,
   postCorrectionsRejections,
+  postReplyAnalysis,
+  postReply,
+  getMyProfile,
 } from '@ext/apiClient';
 import type {
   TermsType,
   CorrectionsRejectionItem,
   ReceiverType,
   PurposeType,
+  ReplyMail,
+  ReplyRequest,
 } from '@/types';
 import StartView from './views/StartView';
 import TermsView from './views/TermsView';
@@ -35,6 +40,7 @@ import {
   getGoogleIdToken,
   signInWithGoogle,
 } from '@ext/auth';
+import { setDevLogging, devLog } from '@/utils/devLogger';
 
 type Screen = 'start' | 'terms' | 'main';
 
@@ -47,6 +53,10 @@ const VIEWS: PanelView[] = [
   'success',
   'error',
   'correction-review',
+  'reply-loading-analysis',
+  'reply-input',
+  'reply-loading-write',
+  'reply-success',
 ];
 const VIEW_LABELS: Record<PanelView, string> = {
   input: 'input',
@@ -54,6 +64,10 @@ const VIEW_LABELS: Record<PanelView, string> = {
   success: 'done',
   error: 'err',
   'correction-review': 'review',
+  'reply-loading-analysis': 'r-load',
+  'reply-input': 'r-input',
+  'reply-loading-write': 'r-write',
+  'reply-success': 'r-done',
 };
 const ERROR_VARIANTS: ErrorVariant[] = [
   'generic',
@@ -75,6 +89,9 @@ const DevToolbar = ({
   onErrorVariantChange,
   devPanelMode,
   onPanelModeChange,
+  devModeActive,
+  onDevModeToggle,
+  onMockInject,
 }: {
   screen: Screen;
   onScreenChange: (s: Screen) => void;
@@ -82,8 +99,11 @@ const DevToolbar = ({
   onViewChange: (v: PanelView | undefined) => void;
   errorVariant: ErrorVariant;
   onErrorVariantChange: (v: ErrorVariant) => void;
-  devPanelMode: 'generate' | 'correct';
-  onPanelModeChange: (m: 'generate' | 'correct') => void;
+  devPanelMode: 'generate' | 'correct' | 'reply' | undefined;
+  onPanelModeChange: (m: 'generate' | 'correct' | 'reply' | undefined) => void;
+  devModeActive: boolean;
+  onDevModeToggle: () => void;
+  onMockInject: () => void;
 }) => {
   const [open, setOpen] = useState(false);
   const isErrorView = devView === 'error';
@@ -167,6 +187,20 @@ const DevToolbar = ({
             </div>
           )}
 
+          {/* Mock 교정 주입 테스트 */}
+          <div className="flex flex-col gap-1">
+            <p className="text-2xs text-text-inverse/50 font-medium uppercase tracking-wide">
+              Inject Test
+            </p>
+            <button
+              type="button"
+              onClick={onMockInject}
+              className="text-2xs rounded px-1.5 py-1 transition-colors cursor-pointer bg-background-warning-subtle text-text-warning hover:opacity-80"
+            >
+              📨 Mock 교정 주입
+            </button>
+          </div>
+
           {/* 모드 전환 (error / loading 뷰에서 메시지 확인용) */}
           {screen === 'main' && showModeToggle && (
             <div className="flex flex-col gap-1">
@@ -174,18 +208,24 @@ const DevToolbar = ({
                 Mode
               </p>
               <div className="flex gap-1">
-                {(['generate', 'correct'] as const).map((m) => (
+                {(['generate', 'correct', 'reply'] as const).map((m) => (
                   <button
                     key={m}
                     type="button"
-                    onClick={() => onPanelModeChange(m)}
+                    onClick={() =>
+                      onPanelModeChange(devPanelMode === m ? undefined : m)
+                    }
                     className={`flex-1 text-2xs rounded px-1.5 py-1 transition-colors cursor-pointer ${
                       devPanelMode === m
                         ? 'bg-background-brand-subtle text-text-brand'
                         : 'bg-background-inverse/30 text-text-inverse/70 hover:bg-background-inverse/50'
                     }`}
                   >
-                    {m === 'generate' ? '생성' : '교정'}
+                    {m === 'generate'
+                      ? '생성'
+                      : m === 'correct'
+                        ? '교정'
+                        : '회신'}
                   </button>
                 ))}
               </div>
@@ -194,14 +234,27 @@ const DevToolbar = ({
         </div>
       )}
 
-      {/* 토글 버튼 */}
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="text-2xs bg-background-inverse/80 hover:bg-background-inverse text-text-inverse rounded-full px-3 py-1 transition-colors cursor-pointer shadow"
-      >
-        {open ? '✕ DEV' : '🛠 DEV'}
-      </button>
+      {/* 하단 버튼 행: DEV 열기/닫기 + ON/OFF 토글 */}
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          className="text-2xs bg-background-inverse/80 hover:bg-background-inverse text-text-inverse rounded-full px-3 py-1 transition-colors cursor-pointer shadow"
+        >
+          {open ? '✕ DEV' : '🛠 DEV'}
+        </button>
+        <button
+          type="button"
+          onClick={onDevModeToggle}
+          className={`text-2xs rounded-full px-2.5 py-1 transition-colors cursor-pointer shadow font-semibold ${
+            devModeActive
+              ? 'bg-background-brand text-text-inverse'
+              : 'bg-background-inverse/40 text-text-inverse/60 hover:bg-background-inverse/60'
+          }`}
+        >
+          {devModeActive ? 'ON' : 'OFF'}
+        </button>
+      </div>
     </div>
   );
 };
@@ -216,12 +269,16 @@ const TERMS_VERSION = '1.0';
 const Panel = () => {
   const [screen, setScreen] = useState<Screen>('start');
   const [devView, setDevView] = useState<PanelView | undefined>(undefined);
-  const [devPanelMode, setDevPanelMode] = useState<'generate' | 'correct'>(
-    'generate'
-  );
+  const [devPanelMode, setDevPanelMode] = useState<
+    'generate' | 'correct' | 'reply' | undefined
+  >(undefined);
+  const [devModeActive, setDevModeActive] = useState(false);
   const [initialPanelMode, setInitialPanelMode] = useState<
-    'generate' | 'correct'
+    'generate' | 'correct' | 'reply'
   >('generate');
+  const [requestedPanelMode, setRequestedPanelMode] = useState<
+    'generate' | 'correct' | undefined
+  >(undefined);
   // 익스텐션은 무제한 — Infinity로 설정해 소진 로직 비활성화
   const [remainingCount] = useState(Infinity);
   const [errorVariant, setErrorVariant] = useState<ErrorVariant>('generic');
@@ -237,6 +294,13 @@ const Panel = () => {
   // 현재 활성 Gmail 탭 ID — 메시지 전송 대상 특정용
   const activeTabIdRef = useRef<number | null>(null);
 
+  // 회신 모드 진입 시 background에서 전달된 메일 데이터 (state → re-render 유발)
+  const [replyData, setReplyData] = useState<{
+    mails: ReplyMail[];
+    to?: string[];
+    cc?: string[];
+  } | null>(null);
+
   // ── 앱 초기화: 저장된 토큰 확인 + 활성 탭 ID 저장 ──────────────
 
   useEffect(() => {
@@ -248,59 +312,98 @@ const Panel = () => {
 
         if (tabId) {
           chrome.tabs.sendMessage(tabId, { type: 'PANEL_OPENED' });
-          // 패널 닫힐 때(언로드) content script에 알림
-          window.addEventListener(
-            'unload',
-            () => {
-              chrome.runtime.sendMessage({ type: 'PANEL_UNLOADED', tabId });
-            },
-            { once: true }
-          );
+          chrome.tabs
+            .sendMessage(tabId, {
+              type: 'DEV_LOGGING',
+              enabled: SHOW_DEV_TOOLBAR,
+            })
+            .catch(() => {});
+          // 포트 연결 — disconnect 시 background가 PANEL_CLOSED를 content script로 전달
+          const port = chrome.runtime.connect({ name: 'panel' });
+          port.postMessage({ type: 'PANEL_REGISTER', tabId });
         }
 
-        getStoredToken()
-          .then((token) => {
-            if (!token) return;
-            // 이미 로그인된 상태로 패널 오픈 → Gmail 본문 확인 후 초기 모드 결정
-            if (tabId) {
-              chrome.tabs.sendMessage(
-                tabId,
-                { type: 'GET_EMAIL_CONTENT' },
-                (response) => {
-                  if (!chrome.runtime.lastError) {
-                    const content = (response?.content ?? '').trim();
-                    console.error(
-                      '[ToneFit] 본문 글자수:',
-                      content.length,
-                      '/ 내용 미리보기:',
-                      content.slice(0, 60)
-                    );
-                    const hasContent = content.length >= 40;
-                    setInitialPanelMode(hasContent ? 'correct' : 'generate');
-                  } else {
-                    console.error(
-                      '[ToneFit] GET_EMAIL_CONTENT 실패:',
-                      chrome.runtime.lastError.message
-                    );
-                  }
+        // GET_REPLY_DATA를 먼저 기다린 뒤 나머지 초기화 진행
+        chrome.runtime.sendMessage(
+          { type: 'GET_REPLY_DATA' },
+          (resp: {
+            data: { mails: ReplyMail[]; to?: string[]; cc?: string[] } | null;
+          }) => {
+            const replyPayload = resp?.data ?? null;
+            if (replyPayload) setReplyData(replyPayload);
+
+            getStoredToken()
+              .then(async (token) => {
+                if (!token) return;
+                // 토큰 유효성 검증 — 만료 시 로그인 화면으로
+                try {
+                  await getMyProfile();
+                } catch {
+                  await clearToken();
+                  setIsLoading(false);
+                  return;
+                }
+                if (tabId) {
+                  chrome.tabs.sendMessage(
+                    tabId,
+                    { type: 'GET_EMAIL_CONTENT' },
+                    (response) => {
+                      if (!chrome.runtime.lastError) {
+                        const userLength =
+                          response?.userLength ??
+                          (response?.content ?? '').trim().length;
+                        devLog(
+                          '[ToneFit] 사용자 입력 글자수(서명 제외):',
+                          userLength
+                        );
+                        if (replyPayload) {
+                          setInitialPanelMode('reply');
+                        } else {
+                          setInitialPanelMode(
+                            userLength >= 40 ? 'correct' : 'generate'
+                          );
+                        }
+                      } else {
+                        console.error(
+                          '[ToneFit] GET_EMAIL_CONTENT 실패:',
+                          chrome.runtime.lastError.message
+                        );
+                      }
+                      setScreen('main');
+                    }
+                  );
+                } else {
                   setScreen('main');
                 }
-              );
-            } else {
-              setScreen('main');
-            }
-          })
-          .catch(console.error)
-          .finally(() => setIsLoading(false));
+              })
+              .catch(console.error)
+              .finally(() => setIsLoading(false));
+          }
+        );
       })
       .catch(() => setIsLoading(false));
   }, []);
 
-  // ── 팝업에서 로그아웃 시 start 화면으로 이동 ────────────────────
+  // ── DEV 로깅 — 패널 번들(Panel + ToneFitPanel) 항상 ON ──────────
   useEffect(() => {
-    const handleMessage = (message: { type: string }) => {
+    setDevLogging(SHOW_DEV_TOOLBAR);
+  }, []);
+
+  // ── 팝업에서 로그아웃 시 start 화면으로 이동 / 툴바 재클릭 모드 힌트 ──
+  useEffect(() => {
+    const handleMessage = (message: { type: string; bodyLength?: number }) => {
       if (message.type === 'LOGOUT') {
         setScreen('start');
+      }
+      if (message.type === 'MODE_HINT' && message.bodyLength !== undefined) {
+        const mode = message.bodyLength >= 40 ? 'correct' : 'generate';
+        devLog(
+          '[ToneFit] MODE_HINT 수신 — bodyLength:',
+          message.bodyLength,
+          '→ mode:',
+          mode
+        );
+        setRequestedPanelMode(mode);
       }
     };
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -332,15 +435,10 @@ const Panel = () => {
                 chrome.runtime.lastError.message
               );
             } else {
-              const content = (response?.content ?? '').trim();
-              console.error(
-                '[ToneFit] 본문 글자수:',
-                content.length,
-                '/ 내용 미리보기:',
-                content.slice(0, 60)
-              );
-              const hasContent = content.length >= 40;
-              setInitialPanelMode(hasContent ? 'correct' : 'generate');
+              const userLength =
+                response?.userLength ?? (response?.content ?? '').trim().length;
+              devLog('[ToneFit] 사용자 입력 글자수(서명 제외):', userLength);
+              setInitialPanelMode(userLength >= 40 ? 'correct' : 'generate');
             }
             setScreen('main');
             if (showTip) setShowTooltip(true);
@@ -436,6 +534,7 @@ const Panel = () => {
   const getEmailContentFromGmail = useCallback((): Promise<{
     content: string;
     subject: string;
+    composeOpen: boolean;
   }> => {
     return new Promise((resolve, reject) => {
       const tabId = activeTabIdRef.current;
@@ -454,17 +553,41 @@ const Panel = () => {
           resolve({
             content: response?.content ?? '',
             subject: response?.subject ?? '',
+            composeOpen: response?.composeOpen ?? false,
           });
         }
       );
     });
   }, []);
 
-  /** 교정 시작 전 본문 길이 사전 검증 — 10자 미만이면 _tooShort throw */
+  const handleReplyAnalysisRequest = useCallback(
+    async (mails: ReplyMail[], to?: string[], cc?: string[]) => {
+      return await postReplyAnalysis({ mails, to, cc });
+    },
+    []
+  );
+
+  const handleReplyWriteRequest = useCallback(async (req: ReplyRequest) => {
+    return await postReply(req);
+  }, []);
+
+  /** 교정 시작 전 사전 검증 — 케이스별 에러 타입 throw */
   const handlePreCheck = useCallback(async () => {
-    const { content } = await getEmailContentFromGmail();
-    if (content.trim().length < 10) {
-      throw Object.assign(new Error('EMAIL_TOO_SHORT'), { _tooShort: true });
+    let result: { content: string; composeOpen: boolean };
+    try {
+      result = await getEmailContentFromGmail();
+    } catch {
+      throw Object.assign(new Error('FETCH_ERROR'), { _fetchError: true });
+    }
+    const { content, composeOpen } = result;
+    if (!composeOpen) {
+      throw Object.assign(new Error('NO_COMPOSE'), { _noCompose: true });
+    }
+    if (content.trim().length === 0) {
+      throw Object.assign(new Error('EMPTY_BODY'), { _empty: true });
+    }
+    if (content.trim().length < 40) {
+      throw Object.assign(new Error('TOO_SHORT'), { _tooShort: true });
     }
   }, [getEmailContentFromGmail]);
 
@@ -476,7 +599,9 @@ const Panel = () => {
       try {
         // 교정 모드: Gmail 본문 읽어서 교정 API 호출 → 리뷰 뷰로 전환
         if (params.correctionMode) {
-          const { content: originalEmail } = await getEmailContentFromGmail();
+          const { content: rawEmail } = await getEmailContentFromGmail();
+          // 연속 빈줄 정규화 — BE 오프셋 기준 및 로컬 merge 기준 통일
+          const originalEmail = rawEmail.trim().replace(/\n{3,}/g, '\n\n');
           const response = await postCorrection({
             receiver_type: params.receiver,
             purpose: params.purpose,
@@ -550,6 +675,38 @@ const Panel = () => {
     });
   }, []);
 
+  /** DEV: 현재 작성창 내용을 읽어 첫 단어를 "[교정됨]"으로 바꾼 mock 결과를 주입 */
+  const handleMockInject = useCallback(async () => {
+    const tabId = activeTabIdRef.current;
+    if (!tabId) {
+      devLog('[MockInject] tabId 없음');
+      return;
+    }
+    try {
+      const response = await new Promise<{ content: string; subject: string }>(
+        (resolve, reject) => {
+          chrome.tabs.sendMessage(
+            tabId,
+            { type: 'GET_EMAIL_CONTENT' },
+            (res) => {
+              if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+              else resolve(res);
+            }
+          );
+        }
+      );
+      const original =
+        response.content || '테스트 본문입니다.\n\n두 번째 단락입니다.';
+      // 첫 단어만 "[교정됨]" 으로 치환
+      const mocked = original.replace(/\S+/, '[교정됨]');
+      devLog('[MockInject] original:', JSON.stringify(original));
+      devLog('[MockInject] mocked  :', JSON.stringify(mocked));
+      handleSuccess(response.subject ?? '', mocked);
+    } catch (err) {
+      console.error('[MockInject] 실패:', err);
+    }
+  }, [handleSuccess]);
+
   const handleReset = useCallback(() => {
     // 새 이메일 작성 → 패널 초기화
   }, []);
@@ -561,14 +718,12 @@ const Panel = () => {
       purpose: PurposeType
     ) => {
       const payload = { receiver_type: receiver, purpose, items };
-      console.error(
+      devLog(
         '[ToneFit] corrections/rejections 전송:',
         JSON.stringify(payload, null, 2)
       );
       postCorrectionsRejections(payload)
-        .then((res) =>
-          console.error('[ToneFit] corrections/rejections 응답:', res)
-        )
+        .then((res) => devLog('[ToneFit] corrections/rejections 응답:', res))
         .catch(console.error);
     },
     []
@@ -628,10 +783,30 @@ const Panel = () => {
               }
               onChipSelect={dismissTooltip}
               onCorrectionsRejected={handleCorrectionsRejected}
-              onPreCheck={handlePreCheck}
+              onPreCheck={
+                SHOW_DEV_TOOLBAR && devModeActive ? undefined : handlePreCheck
+              }
               initialPanelMode={initialPanelMode}
-              devForceView={SHOW_DEV_TOOLBAR ? devView : undefined}
-              devPanelMode={SHOW_DEV_TOOLBAR ? devPanelMode : undefined}
+              requestedPanelMode={requestedPanelMode}
+              devForceView={
+                SHOW_DEV_TOOLBAR && devModeActive ? devView : undefined
+              }
+              devPanelMode={
+                SHOW_DEV_TOOLBAR && devModeActive ? devPanelMode : undefined
+              }
+              replyMails={replyData?.mails}
+              replyTo={replyData?.to}
+              replyCc={replyData?.cc}
+              onReplyAnalysisRequest={handleReplyAnalysisRequest}
+              onReplyWriteRequest={handleReplyWriteRequest}
+              onReplySuccess={(subject, content) => {
+                chrome.tabs.sendMessage(activeTabIdRef.current!, {
+                  type: 'INSERT_EMAIL',
+                  subject,
+                  content,
+                  tabId: activeTabIdRef.current,
+                });
+              }}
             />
           </div>
         )}
@@ -651,6 +826,9 @@ const Panel = () => {
           onErrorVariantChange={setErrorVariant}
           devPanelMode={devPanelMode}
           onPanelModeChange={setDevPanelMode}
+          devModeActive={devModeActive}
+          onDevModeToggle={() => setDevModeActive((v) => !v)}
+          onMockInject={handleMockInject}
         />
       )}
     </div>

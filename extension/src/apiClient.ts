@@ -25,6 +25,10 @@ import type {
   CorrectionsRejectionsResponse,
   TermsType,
   UserProfile,
+  ReplyAnalysisRequest,
+  ReplyAnalysisResponse,
+  ReplyRequest,
+  ReplyResponse,
 } from '@/types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
@@ -157,6 +161,27 @@ export const postCorrectionsRejections = async (
     axios.post<unknown>(`${API_URL}/corrections/rejections`, data, { headers })
   );
   return unwrap<CorrectionsRejectionsResponse>(response.data);
+};
+
+/** 회신 파악 */
+export const postReplyAnalysis = async (
+  data: ReplyAnalysisRequest
+): Promise<ReplyAnalysisResponse> => {
+  const response = await withReauth((headers) =>
+    axios.post<unknown>(`${API_URL}/replies/analysis`, data, {
+      headers,
+      timeout: 60000,
+    })
+  );
+  return unwrap<ReplyAnalysisResponse>(response.data);
+};
+
+/** 회신 작성 */
+export const postReply = async (data: ReplyRequest): Promise<ReplyResponse> => {
+  const response = await withReauth((headers) =>
+    axios.post<unknown>(`${API_URL}/replies`, data, { headers, timeout: 60000 })
+  );
+  return unwrap<ReplyResponse>(response.data);
 };
 
 /** 이메일 생성 */

@@ -392,3 +392,47 @@ export interface SessionDetailResponse {
   created_at: string;
   updated_at: string;
 }
+
+// =============================================================
+// 회신 (Replies)
+// =============================================================
+
+export interface ReplyMail {
+  sender: string;
+  body: string;
+}
+
+export interface ReplyAnalysisRequest {
+  mails: ReplyMail[];
+  to?: string[];
+  cc?: string[];
+}
+
+export interface ReplyQuestion {
+  id: number;
+  text: string;
+}
+
+export interface ReplyAnalysisResponse {
+  conversation: string;
+  receiver_type_suggestion: ReceiverType;
+  questions: ReplyQuestion[];
+}
+
+export interface ReplyAnswer {
+  question_id: number;
+  answer: string;
+}
+
+export interface ReplyRequest {
+  conversation: string;
+  receiver_type: ReceiverType;
+  questions?: ReplyQuestion[];
+  answers?: ReplyAnswer[];
+  free_input?: string;
+}
+
+export interface ReplyResponse {
+  generated_subject: string;
+  generated_email: string;
+}
