@@ -3,10 +3,19 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { crx } from '@crxjs/vite-plugin';
 import path from 'path';
-import manifest from './manifest.json';
+import baseManifest from './manifest.json';
+
+// 스토어 빌드(VITE_TARGET=store)일 때 key 필드 제거
+const isStore = process.env.VITE_TARGET === 'store';
+const { key: _key, ...manifestWithoutKey } = baseManifest;
+const manifest = isStore ? manifestWithoutKey : baseManifest;
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), crx({ manifest })],
+  plugins: [
+    react(),
+    tailwindcss(),
+    crx({ manifest: manifest as typeof baseManifest }),
+  ],
   resolve: {
     // React 이중 인스턴스 방지 — ../src/ 파일들도 extension의 React 사용
     dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react-router-dom'],

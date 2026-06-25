@@ -91,7 +91,7 @@ const ButtonLongV2 = ({
         ${hasIcon ? 'gap-2' : ''}
         ${
           isDisabled
-            ? 'bg-background-disabled border border-border-disabled text-text-disabled cursor-not-allowed pointer-events-none'
+            ? 'bg-action-primary-disabled-background border border-border-disabled text-action-primary-disabled-foreground cursor-not-allowed pointer-events-none'
             : variantClasses[variant]
         }
         ${className}

@@ -38,7 +38,7 @@ export const clearToken = (): Promise<void> =>
  * launchWebAuthFlow로 Google OpenID Connect ID 토큰 발급
  * - response_type=id_token → redirect hash에서 추출
  */
-export const getGoogleIdToken = (): Promise<string> => {
+export const getGoogleIdToken = (interactive = true): Promise<string> => {
   return new Promise((resolve, reject) => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
     if (!clientId) {
@@ -57,7 +57,7 @@ export const getGoogleIdToken = (): Promise<string> => {
     authUrl.searchParams.set('nonce', nonce);
 
     chrome.identity.launchWebAuthFlow(
-      { url: authUrl.toString(), interactive: true },
+      { url: authUrl.toString(), interactive },
       (redirectUrl) => {
         if (chrome.runtime.lastError || !redirectUrl) {
           reject(

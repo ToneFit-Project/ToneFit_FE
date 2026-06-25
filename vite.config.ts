@@ -11,6 +11,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    entries: ['src/**/*.{ts,tsx}'],
+  },
   server: {
     port: 8080, // 백엔드 CORS 허용 포트에 맞춤
     hmr: true,

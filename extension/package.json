@@ -1,11 +1,12 @@
 {
   "name": "tonefit-extension",
-  "version": "0.0.1",
+  "version": "0.0.6",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:store": "tsc -b && VITE_TARGET=store vite build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
