@@ -521,25 +521,20 @@ const injectBody = (content: string) => {
     )
     .join('');
 
-  // 서명 div가 있으면 서명은 그대로 두고 그 앞 노드들만 교체
-  const sigEl = bodyEl.querySelector<HTMLElement>(SIG_SELECTOR);
-  if (sigEl) {
-    const toRemove: ChildNode[] = [];
-    let n: ChildNode | null = bodyEl.firstChild;
-    while (n && n !== sigEl) {
-      toRemove.push(n);
-      n = n.nextSibling;
-    }
-    toRemove.forEach((nd) => bodyEl.removeChild(nd));
-    sigEl.insertAdjacentHTML('beforebegin', newHtml);
-  } else {
-    bodyEl.innerHTML = newHtml;
+  bodyEl.focus();
+
+  // 전체 선택 후 innerHTML 교체 — 선택 없이 교체하면 Gmail이 삽입으로 인식해 중복됨
+  const selection = window.getSelection();
+  if (selection) {
+    const range = document.createRange();
+    range.selectNodeContents(bodyEl);
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
 
-  bodyEl.focus();
+  bodyEl.innerHTML = newHtml;
   bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
-  if (DEBUG)
-    console.error('[ToneFit] 본문 주입 완료 (서명 보존:', !!sigEl, ')');
+  if (DEBUG) console.error('[ToneFit] 본문 주입 완료');
 };
 
 const injectEmail = (subject: string, content: string) => {
@@ -612,6 +607,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     document
       .querySelectorAll<HTMLElement>(`.${TOOLBAR_BTN_CLASS}`)
       .forEach((btn) => btn.classList.add('tonefit-panel-open'));
+    // 작성창이 없으면 자동으로 편지쓰기 버튼 클릭
+    if (!isComposeOpen()) {
+      const composeBtn =
+        document.querySelector<HTMLElement>(COMPOSE_BTN_SELECTOR);
+      composeBtn?.click();
+    }
     return;
   }
 
