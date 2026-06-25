@@ -82,7 +82,6 @@ export const MOCK_CORRECTION_RESPONSE: CorrectionResponse = {
       action: null,
     },
   ],
-  created_at: new Date().toISOString(),
 };
 
 // =============================================================

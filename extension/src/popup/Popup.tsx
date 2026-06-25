@@ -32,16 +32,16 @@ const XIcon = () => (
     <path
       d="M18 6L6 18"
       stroke="#D2D6E1"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     />
     <path
       d="M6 6L18 18"
       stroke="#D2D6E1"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     />
   </svg>
 );
@@ -106,11 +106,20 @@ type DialogState = 'none' | 'logout' | 'ai_confirm';
 
 const Popup = () => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const [isGmail, setIsGmail] = useState<boolean | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [dialog, setDialog] = useState<DialogState>('none');
   const [aiConsent, setAiConsent] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Gmail 탭 여부 감지
+  useEffect(() => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const url = tabs[0]?.url ?? '';
+      setIsGmail(url.startsWith('https://mail.google.com'));
+    });
+  }, []);
 
   // 초기 인증 상태 확인
   useEffect(() => {
@@ -168,6 +177,19 @@ const Popup = () => {
               chrome.storage.local.set({ tonefit_popup_cache: next });
             })
             .catch((err) => {
+              const status = (err as { response?: { status?: number } })
+                ?.response?.status;
+              if (status === 401) {
+                // 토큰 만료 + silent reauth 실패 → 캐시 제거 후 로그인 화면으로
+                chrome.storage.local.remove([
+                  'tonefit_access_token',
+                  'tonefit_user_profile',
+                  'tonefit_popup_cache',
+                ]);
+                chrome.runtime.sendMessage({ type: 'LOGOUT' }).catch(() => {});
+                window.close();
+                return;
+              }
               console.error('[ToneFit Popup] 프로필 조회 실패:', err);
             });
         }
@@ -176,20 +198,20 @@ const Popup = () => {
   }, []);
 
   // 사이드 패널 열기
-  const handleOpenSidePanel = async () => {
-    try {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
-      if (tab?.id !== null && tab?.id !== undefined) {
-        await chrome.sidePanel.open({ tabId: tab.id });
-        window.close();
-      }
-    } catch (err) {
-      console.error('[ToneFit Popup] 사이드 패널 열기 실패:', err);
-    }
-  };
+  // const handleOpenSidePanel = async () => {
+  //   try {
+  //     const [tab] = await chrome.tabs.query({
+  //       active: true,
+  //       currentWindow: true,
+  //     });
+  //     if (tab?.id !== null && tab?.id !== undefined) {
+  //       await chrome.sidePanel.open({ tabId: tab.id });
+  //       window.close();
+  //     }
+  //   } catch (err) {
+  //     console.error('[ToneFit Popup] 사이드 패널 열기 실패:', err);
+  //   }
+  // };
 
   // 로그아웃 확정
   const handleLogoutConfirm = async () => {
@@ -260,7 +282,7 @@ const Popup = () => {
   };
 
   // 로딩 중
-  if (isLoggedIn === null) {
+  if (isLoggedIn === null || isGmail === null) {
     return (
       <div
         className="bg-background-page flex items-center justify-center"
@@ -314,17 +336,47 @@ const Popup = () => {
     </div>
   );
 
+  // Gmail 탭이 아닌 경우 — 안내 팝업
+  if (!isGmail) {
+    return (
+      <div
+        className="bg-background-page flex flex-col gap-5 items-center p-3"
+        style={{ width: 340 }}
+      >
+        <Header />
+        <div className="flex flex-col gap-6 items-center w-full pb-2">
+          <div className="flex flex-col gap-2 items-center text-center w-full">
+            <p className="text-lg font-semibold leading-6.5 tracking-tight text-text-primary">
+              Gmail에서만 사용할 수 있어요
+            </p>
+            <p className="text-xs font-normal leading-4.5 tracking-tight text-text-tertiary">
+              Gmail 탭으로 이동한 뒤 ToneFit 아이콘을 눌러주세요.
+            </p>
+          </div>
+        </div>
+        <ButtonCoreV2
+          onClick={() => {
+            chrome.tabs.create({ url: 'https://mail.google.com' });
+            window.close();
+          }}
+        >
+          Gmail 열기
+        </ButtonCoreV2>
+      </div>
+    );
+  }
+
   // ── 미로그인 상태 ──────────────────────────────────────────────────
   if (!isLoggedIn) {
     return (
       <div
-        className="bg-background-page flex flex-col gap-10 items-center p-3 rounded-2xl"
+        className="bg-background-page flex flex-col gap-5 items-center p-3"
         style={{ width: 340 }}
       >
         <Header />
 
         {/* 본문 */}
-        <div className="flex flex-col gap-6 items-center w-full">
+        <div className="flex flex-col gap-6 items-center w-full pb-2">
           {/* 아바타 플레이스홀더 */}
           <div className="size-15 rounded-full bg-background-subtle flex items-center justify-center shadow-sm">
             <svg
@@ -423,7 +475,7 @@ const Popup = () => {
           </div>
 
           <div className="flex flex-col gap-2 items-center text-center w-full">
-            <div className="text-lg font-semibold leading-6 tracking-tight text-text-primary w-full">
+            <div className="text-lg font-semibold leading-6.5 tracking-tight text-text-primary w-full">
               <p>
                 쓰는 법을 몰라도 괜찮아요.
                 <br />
@@ -437,9 +489,9 @@ const Popup = () => {
         </div>
 
         {/* 로그인 버튼 */}
-        <ButtonCoreV2 onClick={handleOpenSidePanel} className="cursor-pointer">
+        {/* <ButtonCoreV2 onClick={handleOpenSidePanel} className="cursor-pointer">
           로그인
-        </ButtonCoreV2>
+        </ButtonCoreV2> */}
       </div>
     );
   }
@@ -447,7 +499,7 @@ const Popup = () => {
   // ── 로그인 상태 (+ 다이얼로그 오버레이) ────────────────────────────
   return (
     <div
-      className="bg-background-page flex flex-col gap-4 items-center p-3 rounded-2xl relative"
+      className="bg-background-page flex flex-col gap-4 items-center p-3 relative"
       style={{ width: 340 }}
     >
       <Header />

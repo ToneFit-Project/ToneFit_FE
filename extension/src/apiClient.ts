@@ -9,7 +9,7 @@
 
 import axios from 'axios';
 
-const DEBUG = false; // 디버그 로그 확인 시 true로 변경
+const DEBUG = false;
 import {
   getStoredToken,
   storeToken,
@@ -19,8 +19,16 @@ import {
 import type {
   GenerationRequest,
   GenerationResponse,
+  CorrectionRequest,
+  CorrectionResponse,
+  CorrectionsRejectionsRequest,
+  CorrectionsRejectionsResponse,
   TermsType,
   UserProfile,
+  ReplyAnalysisRequest,
+  ReplyAnalysisResponse,
+  ReplyRequest,
+  ReplyResponse,
 } from '@/types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
@@ -38,10 +46,16 @@ const silentReauth = (): Promise<string> => {
 
   silentReauthPromise = (async () => {
     try {
-      const idToken = await getGoogleIdToken();
+      const idToken = await getGoogleIdToken(false); // interactive:false — UI 팝업 없이 시도
       const result = await signInWithGoogle(idToken);
       await storeToken(result.data.access_token);
       return result.data.access_token;
+    } catch (err) {
+      // Google 세션 만료 → 사용자가 직접 로그인해야 함
+      console.error('[ToneFit API] silentReauth 실패:', err);
+      throw Object.assign(new Error('SESSION_EXPIRED'), {
+        _sessionExpired: true,
+      });
     } finally {
       silentReauthPromise = null;
     }
@@ -80,6 +94,7 @@ const withReauth = async <T>(
     if (status !== 401) throw err;
 
     // silent re-auth 후 재시도
+    console.error('[ToneFit API] 401 감지 → silentReauth 시도');
     const newToken = await silentReauth();
     const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
     return await fn(retryHeaders);
@@ -119,6 +134,54 @@ export const toggleTerms = async (
   await withReauth((headers) =>
     axios.patch(`${API_URL}/users/me/terms/${type}`, { agreed }, { headers })
   );
+};
+
+/** 이메일 교정 */
+export const postCorrection = async (
+  data: CorrectionRequest
+): Promise<CorrectionResponse> => {
+  if (DEBUG) console.error('[ToneFit API] postCorrection 요청', data);
+  const response = await withReauth((headers) =>
+    axios.post<unknown>(`${API_URL}/corrections`, data, {
+      headers,
+      timeout: 60000,
+    })
+  );
+  const result = unwrap<CorrectionResponse>(response.data);
+  if (DEBUG)
+    console.error('[ToneFit API] postCorrection 응답', response.status, result);
+  return result;
+};
+
+/** 거절 항목 보존 */
+export const postCorrectionsRejections = async (
+  data: CorrectionsRejectionsRequest
+): Promise<CorrectionsRejectionsResponse> => {
+  const response = await withReauth((headers) =>
+    axios.post<unknown>(`${API_URL}/corrections/rejections`, data, { headers })
+  );
+  return unwrap<CorrectionsRejectionsResponse>(response.data);
+};
+
+/** 회신 파악 */
+export const postReplyAnalysis = async (
+  data: ReplyAnalysisRequest
+): Promise<ReplyAnalysisResponse> => {
+  const response = await withReauth((headers) =>
+    axios.post<unknown>(`${API_URL}/replies/analysis`, data, {
+      headers,
+      timeout: 60000,
+    })
+  );
+  return unwrap<ReplyAnalysisResponse>(response.data);
+};
+
+/** 회신 작성 */
+export const postReply = async (data: ReplyRequest): Promise<ReplyResponse> => {
+  const response = await withReauth((headers) =>
+    axios.post<unknown>(`${API_URL}/replies`, data, { headers, timeout: 60000 })
+  );
+  return unwrap<ReplyResponse>(response.data);
 };
 
 /** 이메일 생성 */

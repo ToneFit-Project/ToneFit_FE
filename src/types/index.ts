@@ -207,7 +207,8 @@ export interface CorrectionChange {
   label: CorrectionLabelType; // AUTO | SUGGEST | STYLE
   confidence: number; // 교정 신뢰도 0~1
   applied_rules: string[]; // 적용된 규칙 코드
-  action: FeedbackActionType | null; // 사용자 응답 (미응답 시 null)
+  action: FeedbackActionType | null; // 사용자 수락/거절 상태
+  rejectReason?: string; // 거절 사유 (선택)
 }
 
 /** 임시저장(Draft) 요청 — 모든 필드 선택 */
@@ -249,7 +250,24 @@ export interface CorrectionRequest {
 export interface CorrectionResponse {
   session_id: number;
   changes: CorrectionChange[];
-  created_at: string;
+}
+
+/** POST /corrections/rejections 요청 — 거절 항목 보존 */
+export interface CorrectionsRejectionItem {
+  label: CorrectionLabelType;
+  original_phrase: string;
+  corrected_phrase: string;
+  meaning_damage_suspected?: boolean | null;
+}
+
+export interface CorrectionsRejectionsRequest {
+  receiver_type: ReceiverType;
+  purpose: PurposeType;
+  items: CorrectionsRejectionItem[];
+}
+
+export interface CorrectionsRejectionsResponse {
+  stored: number;
 }
 
 /**
@@ -376,4 +394,48 @@ export interface SessionDetailResponse {
   feedbacks: FeedbackDetail[];
   created_at: string;
   updated_at: string;
+}
+
+// =============================================================
+// 회신 (Replies)
+// =============================================================
+
+export interface ReplyMail {
+  sender: string;
+  body: string;
+}
+
+export interface ReplyAnalysisRequest {
+  mails: ReplyMail[];
+  to?: string[];
+  cc?: string[];
+}
+
+export interface ReplyQuestion {
+  id: number;
+  text: string;
+}
+
+export interface ReplyAnalysisResponse {
+  conversation: string;
+  receiver_type_suggestion: ReceiverType;
+  questions: ReplyQuestion[];
+}
+
+export interface ReplyAnswer {
+  question_id: number;
+  answer: string;
+}
+
+export interface ReplyRequest {
+  conversation: string;
+  receiver_type: ReceiverType;
+  questions?: ReplyQuestion[];
+  answers?: ReplyAnswer[];
+  free_input?: string;
+}
+
+export interface ReplyResponse {
+  generated_subject: string;
+  generated_email: string;
 }
