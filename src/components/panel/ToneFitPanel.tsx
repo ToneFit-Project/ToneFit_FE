@@ -85,6 +85,7 @@ const DEV_MOCK_CHANGES: import('@/types').CorrectionChange[] = [
     label: 'AUTO',
     confidence: 0.95,
     applied_rules: [],
+    action: null,
   },
   {
     index: 1,
@@ -96,6 +97,7 @@ const DEV_MOCK_CHANGES: import('@/types').CorrectionChange[] = [
     label: 'SUGGEST',
     confidence: 0.88,
     applied_rules: [],
+    action: null,
   },
   {
     index: 2,
@@ -107,6 +109,7 @@ const DEV_MOCK_CHANGES: import('@/types').CorrectionChange[] = [
     label: 'STYLE',
     confidence: 0.75,
     applied_rules: [],
+    action: null,
   },
 ];
 

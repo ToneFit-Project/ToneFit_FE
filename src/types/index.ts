@@ -207,6 +207,8 @@ export interface CorrectionChange {
   label: CorrectionLabelType; // AUTO | SUGGEST | STYLE
   confidence: number; // 교정 신뢰도 0~1
   applied_rules: string[]; // 적용된 규칙 코드
+  action: FeedbackActionType | null; // 사용자 수락/거절 상태
+  rejectReason?: string; // 거절 사유 (선택)
 }
 
 /** 임시저장(Draft) 요청 — 모든 필드 선택 */
@@ -246,6 +248,7 @@ export interface CorrectionRequest {
 
 /** POST /corrections 응답 (201) */
 export interface CorrectionResponse {
+  session_id: number;
   changes: CorrectionChange[];
 }
 
