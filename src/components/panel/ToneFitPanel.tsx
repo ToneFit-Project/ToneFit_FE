@@ -1880,6 +1880,7 @@ const ToneFitPanel = ({
   const [panelMode, setPanelMode] = useState<PanelMode>(
     initialPanelMode ?? 'generate'
   );
+  const [view, setView] = useState<PanelView>('input');
 
   // 툴바 버튼 재클릭 시 input 뷰에서만 모드 갱신
   useEffect(() => {
@@ -1894,7 +1895,6 @@ const ToneFitPanel = ({
   const [receiver, setReceiver] = useState<ReceiverType | null>(null);
   const [purpose, setPurpose] = useState<PurposeType | null>(null);
   const [emailText, setEmailText] = useState('');
-  const [view, setView] = useState<PanelView>('input');
   const [correctionSession, setCorrectionSession] = useState<Extract<
     GenerateResult,
     { type: 'correction' }
@@ -1911,7 +1911,7 @@ const ToneFitPanel = ({
   const replyStartedRef = useRef(false);
 
   /** 모드 전환 — 교정 모드 최초 진입 시에만 안내 배너 표시 */
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+
   const handleModeChange = useCallback((m: PanelMode) => {
     setPanelMode(m);
     if (m === 'correct') {
@@ -1934,7 +1934,6 @@ const ToneFitPanel = ({
         emailText.length <= EMAIL_MAX &&
         !isOnlyJamoOrSpaces(emailText);
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const showToast = useCallback((message: string) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(message);
