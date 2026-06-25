@@ -294,6 +294,9 @@ const Panel = () => {
   // 현재 활성 Gmail 탭 ID — 메시지 전송 대상 특정용
   const activeTabIdRef = useRef<number | null>(null);
 
+  // 현재 탭이 Gmail인지 여부 — 오버레이 표시용
+  const [isGmailTab, setIsGmailTab] = useState<boolean>(true);
+
   // 회신 모드 진입 시 background에서 전달된 메일 데이터 (state → re-render 유발)
   const [replyData, setReplyData] = useState<{
     mails: ReplyMail[];
@@ -303,10 +306,40 @@ const Panel = () => {
 
   // ── 앱 초기화: 저장된 토큰 확인 + 활성 탭 ID 저장 ──────────────
 
+  // 탭 변경 시 Gmail 여부 감지
+  useEffect(() => {
+    const checkGmail = (tabId?: number) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const url = tabs[0]?.url ?? '';
+        const gmail = url.startsWith('https://mail.google.com');
+        setIsGmailTab(gmail);
+        if (gmail && tabId !== undefined) activeTabIdRef.current = tabId;
+      });
+    };
+
+    const onActivated = (info: chrome.tabs.TabActiveInfo) =>
+      checkGmail(info.tabId);
+    const onUpdated = (
+      tabId: number,
+      changeInfo: chrome.tabs.TabChangeInfo
+    ) => {
+      if (changeInfo.status === 'complete') checkGmail(tabId);
+    };
+
+    chrome.tabs.onActivated.addListener(onActivated);
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    return () => {
+      chrome.tabs.onActivated.removeListener(onActivated);
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+    };
+  }, []);
+
   useEffect(() => {
     chrome.tabs
       .query({ active: true, currentWindow: true })
       .then((tabs) => {
+        const url = tabs[0]?.url ?? '';
+        setIsGmailTab(url.startsWith('https://mail.google.com'));
         const tabId = tabs[0]?.id ?? null;
         activeTabIdRef.current = tabId;
 
@@ -754,7 +787,55 @@ const Panel = () => {
 
   return (
     <div className="w-full h-screen flex flex-col bg-background-page">
-      <div className="inner bg-background-surface rounded-xl max-w-[360px] w-full h-full mx-auto overflow-hidden">
+      <div className="inner bg-background-surface rounded-xl max-w-[360px] w-full h-full mx-auto overflow-hidden relative">
+        {/* 비 Gmail 탭 오버레이 */}
+        {!isGmailTab && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-background-surface px-6">
+            <div className="size-15 rounded-full bg-background-subtle flex items-center justify-center">
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 32 32"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M4 8C4 6.89543 4.89543 6 6 6H26C27.1046 6 28 6.89543 28 8V24C28 25.1046 27.1046 26 26 26H6C4.89543 26 4 25.1046 4 24V8Z"
+                  stroke="var(--color-icon-brand)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M4 9L16 18L28 9"
+                  stroke="var(--color-icon-brand)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <div className="flex flex-col gap-2 items-center text-center">
+              <p className="text-lg font-semibold leading-6.5 tracking-tight text-text-primary">
+                Gmail에서만 사용할 수 있어요
+              </p>
+              <p className="text-xs font-normal leading-4.5 tracking-tight text-text-tertiary">
+                Gmail 탭으로 이동하면
+                <br />
+                ToneFit을 바로 사용할 수 있어요.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                chrome.tabs.create({ url: 'https://mail.google.com' })
+              }
+              className="w-full h-11 flex items-center justify-center rounded-xl bg-background-brand text-text-inverse text-sm font-semibold leading-5 tracking-tight cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              Gmail 열기
+            </button>
+          </div>
+        )}
         {screen === 'start' && (
           <StartView
             onGoogleLogin={handleGoogleLogin}
