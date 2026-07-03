@@ -148,6 +148,268 @@ export function AIPencilWritingIcon({
   );
 }
 
+interface LoginExpiredIconProps {
+  size?: number;
+  title?: string;
+}
+
+export function LoginExpiredIcon({
+  size = 160,
+  title = '로그인 만료',
+}: LoginExpiredIconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 160 160"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={title}
+    >
+      <style>{`
+        .tf-login-lock {
+          transform-origin: 78px 84px;
+          animation: tf-login-lock 5.8s cubic-bezier(.22,.9,.2,1) infinite;
+        }
+        .tf-login-shackle {
+          stroke-dasharray: 92;
+          stroke-dashoffset: 92;
+          animation: tf-login-shackle 5.8s cubic-bezier(.42,0,.2,1) infinite;
+        }
+        .tf-login-key {
+          transform-origin: 114px 92px;
+          animation: tf-login-key 5.8s cubic-bezier(.22,.9,.2,1) infinite;
+        }
+        @keyframes tf-login-shackle {
+          0%,8%  { stroke-dashoffset:92; opacity:.55; }
+          20%,88%{ stroke-dashoffset:0;  opacity:1;   }
+          100%   { stroke-dashoffset:92; opacity:.55; }
+        }
+        @keyframes tf-login-key {
+          0%,20% { opacity:0; transform:translateX(22px) rotate(0deg);  }
+          32%    { opacity:1; transform:translateX(0)    rotate(0deg);   }
+          43%    { opacity:1; transform:translateX(-4px) rotate(-7deg);  }
+          52%    { opacity:1; transform:translateX(7px)  rotate(8deg);   }
+          64%,86%{ opacity:1; transform:translateX(14px) rotate(0deg);   }
+          100%   { opacity:0; transform:translateX(22px) rotate(0deg);   }
+        }
+        @keyframes tf-login-lock {
+          0%,36%   { transform:translateX(0)     rotate(0deg);    }
+          43%      { transform:translateX(-1.8px) rotate(-1.2deg); }
+          50%      { transform:translateX(1.8px)  rotate(1.2deg);  }
+          57%,100% { transform:translateX(0)     rotate(0deg);    }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .tf-login-lock,.tf-login-shackle,.tf-login-key { animation:none; }
+          .tf-login-shackle,.tf-login-key { opacity:1; }
+        }
+      `}</style>
+      <defs>
+        <clipPath id="tf-login-shackle-clip">
+          <rect x="0" y="0" width="160" height="74" />
+        </clipPath>
+      </defs>
+      <g className="tf-login-lock">
+        <path
+          className="tf-login-shackle"
+          clipPath="url(#tf-login-shackle-clip)"
+          d="M58 76V66C58 53.8497 67.8497 44 80 44C92.1503 44 102 53.8497 102 66V76"
+          stroke="#7C4DFF"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
+        <rect
+          x="46"
+          y="72"
+          width="68"
+          height="52"
+          rx="16"
+          fill="#F2EDFF"
+          stroke="#7C4DFF"
+          strokeWidth="6"
+        />
+        <circle cx="80" cy="95" r="6" fill="#7C4DFF" />
+        <rect x="77" y="99" width="6" height="13" rx="3" fill="#7C4DFF" />
+      </g>
+      <g className="tf-login-key">
+        <circle
+          cx="122"
+          cy="92"
+          r="9"
+          fill="white"
+          stroke="#7C4DFF"
+          strokeWidth="5"
+        />
+        <rect x="91" y="89" width="28" height="6" rx="3" fill="#7C4DFF" />
+        <path
+          d="M94 92V101"
+          stroke="#7C4DFF"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M102 92V98"
+          stroke="#7C4DFF"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+      </g>
+    </svg>
+  );
+}
+
+interface ErrorNoticeIconProps {
+  size?: number;
+  title?: string;
+}
+
+export function ErrorNoticeIcon({
+  size = 160,
+  title = '오류 발생',
+}: ErrorNoticeIconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 160 160"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={title}
+    >
+      <style>{`
+        .tf-error-halo {
+          transform-origin: 80px 80px;
+          animation: tf-error-halo 5.2s ease-in-out infinite;
+        }
+        .tf-error-doc {
+          transform-origin: 78px 82px;
+          animation: tf-error-doc 5.2s cubic-bezier(.22,.9,.2,1) infinite;
+        }
+        .tf-error-line-1,.tf-error-line-2,.tf-error-line-3 {
+          animation: tf-error-line 5.2s ease-in-out infinite;
+        }
+        .tf-error-line-2 { animation-delay:.1s; }
+        .tf-error-line-3 { animation-delay:.2s; }
+        .tf-error-badge {
+          transform-origin: 108px 106px;
+          animation: tf-error-badge 5.2s cubic-bezier(.22,.9,.2,1) infinite;
+        }
+        .tf-error-ring {
+          transform-origin: 108px 106px;
+          animation: tf-error-ring 5.2s ease-out infinite;
+        }
+        .tf-error-mark {
+          transform-origin: 108px 106px;
+          animation: tf-error-mark 5.2s cubic-bezier(.22,.9,.2,1) infinite;
+        }
+        @keyframes tf-error-halo {
+          0%,12%   { opacity:.2;  transform:scale(.92); }
+          30%,82%  { opacity:.48; transform:scale(1);   }
+          100%     { opacity:.2;  transform:scale(.92); }
+        }
+        @keyframes tf-error-doc {
+          0%,8%    { opacity:.78; transform:translateY(4px) scale(.97); }
+          20%,84%  { opacity:1;   transform:translateY(0)   scale(1);   }
+          100%     { opacity:.78; transform:translateY(4px) scale(.97); }
+        }
+        @keyframes tf-error-line {
+          0%,16%   { opacity:.38; }
+          32%,84%  { opacity:1;   }
+          100%     { opacity:.38; }
+        }
+        @keyframes tf-error-badge {
+          0%,24%   { opacity:0; transform:translateY(5px) scale(.82); }
+          34%      { opacity:1; transform:translateY(0)   scale(1.06); }
+          42%,86%  { opacity:1; transform:translateY(0)   scale(1);    }
+          100%     { opacity:0; transform:translateY(5px) scale(.88);  }
+        }
+        @keyframes tf-error-ring {
+          0%,35%   { opacity:0;   transform:scale(.74);  }
+          44%      { opacity:.42;                        }
+          66%,100% { opacity:0;   transform:scale(1.34); }
+        }
+        @keyframes tf-error-mark {
+          0%,34%   { transform:scale(.9);  }
+          43%      { transform:scale(1.08);}
+          52%,100% { transform:scale(1);  }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .tf-error-halo,.tf-error-doc,.tf-error-line-1,.tf-error-line-2,
+          .tf-error-line-3,.tf-error-badge,.tf-error-ring,.tf-error-mark { animation:none; }
+          .tf-error-halo { opacity:.38; }
+          .tf-error-doc,.tf-error-line-1,.tf-error-line-2,.tf-error-line-3,.tf-error-badge { opacity:1; }
+          .tf-error-ring { opacity:0; }
+        }
+      `}</style>
+      <circle className="tf-error-halo" cx="80" cy="80" r="52" fill="#F2EDFF" />
+      <g className="tf-error-doc">
+        <rect
+          x="46"
+          y="46"
+          width="68"
+          height="68"
+          rx="18"
+          fill="#F2EDFF"
+          stroke="#7C4DFF"
+          strokeWidth="6"
+        />
+        <rect
+          className="tf-error-line-1"
+          x="61"
+          y="63"
+          width="39"
+          height="6"
+          rx="3"
+          fill="#7C4DFF"
+        />
+        <rect
+          className="tf-error-line-2"
+          x="61"
+          y="78"
+          width="33"
+          height="6"
+          rx="3"
+          fill="#9B78FF"
+        />
+        <rect
+          className="tf-error-line-3"
+          x="61"
+          y="93"
+          width="24"
+          height="6"
+          rx="3"
+          fill="#BFA7FF"
+        />
+      </g>
+      <circle
+        className="tf-error-ring"
+        cx="108"
+        cy="106"
+        r="22"
+        stroke="#9B78FF"
+        strokeWidth="6"
+      />
+      <g className="tf-error-badge">
+        <circle cx="108" cy="106" r="23" fill="white" />
+        <circle cx="108" cy="106" r="18" fill="#7C4DFF" />
+        <g className="tf-error-mark">
+          <rect
+            x="105.4"
+            y="93.5"
+            width="5.2"
+            height="15.5"
+            rx="2.6"
+            fill="white"
+          />
+          <circle cx="108" cy="115" r="3.1" fill="white" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
 interface MailReadingIconProps {
   size?: number;
   title?: string;
@@ -219,6 +481,129 @@ export function MailReadingIcon({
           fill="#7C4DFF"
         />
         <circle cx="46.5" cy="26.5" r="9.5" fill="#FBFAFF" />
+      </g>
+    </svg>
+  );
+}
+interface NoCorrectionIconProps {
+  size?: number;
+  title?: string;
+}
+
+export function NoCorrectionIcon({
+  size = 160,
+  title = '제안할 교정 항목 없음',
+}: NoCorrectionIconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 160 160"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={title}
+    >
+      <style>{`
+        .tf-no-correction-doc {
+          transform-origin: 80px 80px;
+          animation: tf-no-correction-doc 6s ease-in-out infinite;
+        }
+        .tf-no-correction-line-1,
+        .tf-no-correction-line-2,
+        .tf-no-correction-line-3 {
+          transform-origin: 80px 80px;
+          animation: tf-no-correction-lines 6s ease-in-out infinite;
+        }
+        .tf-no-correction-line-2 { animation-delay: .1s; }
+        .tf-no-correction-line-3 { animation-delay: .2s; }
+        .tf-no-correction-badge {
+          transform-origin: 110px 104px;
+          animation: tf-no-correction-badge 6s cubic-bezier(.22, .9, .2, 1) infinite;
+        }
+        @keyframes tf-no-correction-doc {
+          0%, 8%   { opacity: .92; transform: scale(.98); }
+          18%, 88% { opacity: 1;   transform: scale(1);   }
+          100%     { opacity: .92; transform: scale(.98); }
+        }
+        @keyframes tf-no-correction-lines {
+          0%, 12%  { opacity: .35; }
+          28%, 88% { opacity: 1;   }
+          100%     { opacity: .35; }
+        }
+        @keyframes tf-no-correction-badge {
+          0%, 28%  { opacity: 0; transform: translateY(3px) scale(.86); }
+          36%      { opacity: 1; transform: translateY(0)  scale(1.04); }
+          44%, 92% { opacity: 1; transform: translateY(0)  scale(1);    }
+          100%     { opacity: 0; transform: translateY(3px) scale(.92); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .tf-no-correction-doc,
+          .tf-no-correction-line-1,
+          .tf-no-correction-line-2,
+          .tf-no-correction-line-3,
+          .tf-no-correction-badge { animation: none; }
+          .tf-no-correction-line-1,
+          .tf-no-correction-line-2,
+          .tf-no-correction-line-3,
+          .tf-no-correction-badge { opacity: 1; }
+        }
+      `}</style>
+
+      <g className="tf-no-correction-doc">
+        <rect
+          x="48"
+          y="48"
+          width="65"
+          height="65"
+          rx="16"
+          fill="#F2EDFF"
+          stroke="#7C4DFF"
+          strokeWidth="6"
+        />
+        <rect
+          className="tf-no-correction-line-1"
+          x="62"
+          y="64"
+          width="39"
+          height="6"
+          rx="3"
+          fill="#7C4DFF"
+        />
+        <rect
+          className="tf-no-correction-line-2"
+          x="62"
+          y="78"
+          width="39"
+          height="6"
+          rx="3"
+          fill="#9B78FF"
+        />
+        <rect
+          className="tf-no-correction-line-3"
+          x="62"
+          y="92"
+          width="29"
+          height="6"
+          rx="3"
+          fill="#BFA7FF"
+        />
+      </g>
+
+      <g className="tf-no-correction-badge">
+        <circle cx="110" cy="104" r="20" fill="#FFFFFF" />
+        <circle cx="110" cy="104" r="17" fill="#7C4DFF" />
+        <text
+          x="110"
+          y="111"
+          textAnchor="middle"
+          fontFamily="Inter, Pretendard, Arial, sans-serif"
+          fontSize="20"
+          fontWeight="800"
+          fill="#FFFFFF"
+        >
+          0
+        </text>
       </g>
     </svg>
   );
