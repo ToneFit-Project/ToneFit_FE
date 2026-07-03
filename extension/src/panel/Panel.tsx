@@ -1026,17 +1026,17 @@ const Panel = () => {
               onAgreeMailRead={handleAgreeMailRead}
               onReplyWriteRequest={handleReplyWriteRequest}
               onReplySuccess={(subject, content) => {
-                console.error(
+                devLog(
                   '[ToneFit] onReplySuccess — subject:',
                   subject,
                   '/ content 길이:',
                   content?.length
                 );
-                console.error(
+                devLog(
                   '[ToneFit] onReplySuccess content 앞 200자:',
                   content?.slice(0, 200)
                 );
-                console.error('[ToneFit] activeTabId:', activeTabIdRef.current);
+                devLog('[ToneFit] activeTabId:', activeTabIdRef.current);
                 chrome.tabs.sendMessage(activeTabIdRef.current!, {
                   type: 'INSERT_EMAIL',
                   subject,

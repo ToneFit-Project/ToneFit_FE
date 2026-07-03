@@ -714,7 +714,7 @@ const PanelReplyInputBody = ({
       original_subject: originalSubject || undefined,
       questions: analysis.questions.length > 0 ? analysis.questions : undefined,
       answers: answerItems.length > 0 ? answerItems : undefined,
-      free_input: freeInput.trim() || '(없음)',
+      free_input: freeInput.trim() || undefined,
       extra_message: extraMessage.trim() || undefined,
     });
   };

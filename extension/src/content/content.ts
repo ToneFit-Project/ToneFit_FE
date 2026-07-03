@@ -208,10 +208,11 @@ const injectToolbarButton = (composeEl: HTMLElement): boolean => {
     composeEl.querySelector<HTMLElement>(SEND_DROPDOWN_SELECTORS) ??
     composeEl.querySelector<HTMLElement>(SEND_BTN_SELECTORS);
   if (!dropdownBtn) {
-    console.error(
-      '[ToneFit] 드롭다운/보내기 버튼을 찾지 못했습니다.',
-      SEND_DROPDOWN_SELECTORS
-    );
+    if (DEBUG)
+      console.error(
+        '[ToneFit] 드롭다운/보내기 버튼을 찾지 못했습니다.',
+        SEND_DROPDOWN_SELECTORS
+      );
     return false;
   }
 
@@ -298,12 +299,13 @@ const injectToolbarButton = (composeEl: HTMLElement): boolean => {
         }
       }
 
-      console.error(
-        '[ToneFit] reply 추출 — sender:',
-        sender,
-        '/ body 길이:',
-        body.length
-      );
+      if (DEBUG)
+        console.error(
+          '[ToneFit] reply 추출 — sender:',
+          sender,
+          '/ body 길이:',
+          body.length
+        );
 
       // 본문이 완전히 비어있는 경우 — quoteEl/uet 모두 없으면 대화 없음, 있는데 내용만 없으면 읽기 실패
       if (!body) {
@@ -400,9 +402,10 @@ const observeComposeWindows = () => {
       if (attempt < RETRY_DELAYS.length) {
         setTimeout(attempt_inject, RETRY_DELAYS[attempt]);
       } else {
-        console.error(
-          '[ToneFit] 툴바 버튼 삽입 최종 실패 — 드롭다운 버튼 없음'
-        );
+        if (DEBUG)
+          console.error(
+            '[ToneFit] 툴바 버튼 삽입 최종 실패 — 드롭다운 버튼 없음'
+          );
       }
     };
     setTimeout(attempt_inject, RETRY_DELAYS[0]);
@@ -509,16 +512,17 @@ observeComposeWindows();
 
 const showOverlay = () => {
   if (!isComposeOpen()) {
-    console.error(
-      '[ToneFit] 작성창을 찾을 수 없어 오버레이를 표시하지 않습니다'
-    );
+    if (DEBUG)
+      console.error(
+        '[ToneFit] 작성창을 찾을 수 없어 오버레이를 표시하지 않습니다'
+      );
     return;
   }
   if (document.getElementById(OVERLAY_ID)) return;
 
   const container = getComposeContainer();
   if (!container) {
-    console.error('[ToneFit] 작성창 컨테이너를 찾을 수 없습니다');
+    if (DEBUG) console.error('[ToneFit] 작성창 컨테이너를 찾을 수 없습니다');
     return;
   }
 
@@ -675,13 +679,15 @@ const getUserTypedLength = (
 const injectBody = (content: string) => {
   const bodyEl = getBodyElement();
   if (!bodyEl) {
-    console.error('[ToneFit] 본문 영역을 찾을 수 없습니다.', BODY_SELECTORS);
+    if (DEBUG)
+      console.error('[ToneFit] 본문 영역을 찾을 수 없습니다.', BODY_SELECTORS);
     return;
   }
 
   const escapeHtml = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const normalized = content.trim().replace(/\n{3,}/g, '\n\n');
+  const unescaped = content.replace(/\\n/g, '\n');
+  const normalized = unescaped.trim().replace(/\n{3,}/g, '\n\n');
   const newHtml = normalized
     .split('\n')
     .map((line) =>
@@ -714,32 +720,49 @@ const injectEmail = (subject: string, content: string) => {
 const doInjectReplyBody = (bodyEl: HTMLElement, content: string) => {
   const escapeHtml = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const normalized = content.trim().replace(/\n{3,}/g, '\n\n');
-  const newHtml = normalized
+  const unescaped = content.replace(/\\n/g, '\n');
+  const normalized = unescaped.trim().replace(/\n{3,}/g, '\n\n') + '\n\n';
+  const draftHtml = normalized
     .split('\n')
     .map((line) =>
       line.trim() === '' ? '<div><br></div>' : `<div>${escapeHtml(line)}</div>`
     )
     .join('');
 
-  bodyEl.focus();
+  // 펼쳐진 인용 메일(.gmail_quote)이 있으면 보존하고 앞부분만 교체
+  const quoteEl = bodyEl.querySelector<HTMLElement>('.gmail_quote');
 
-  const selection = window.getSelection();
-  if (selection) {
-    const range = document.createRange();
-    range.selectNodeContents(bodyEl);
-    selection.removeAllRanges();
-    selection.addRange(range);
+  // bodyEl의 직계 자식 중 quoteEl을 포함하는 노드를 찾는다
+  let anchorChild: Node | null = quoteEl;
+  while (anchorChild && anchorChild.parentNode !== bodyEl) {
+    anchorChild = anchorChild.parentNode;
   }
 
-  bodyEl.innerHTML = newHtml;
+  if (anchorChild) {
+    // anchorChild 이전의 직계 자식만 제거 후 초안 삽입
+    const nodesToRemove: Node[] = [];
+    for (const node of Array.from(bodyEl.childNodes)) {
+      if (node === anchorChild) break;
+      nodesToRemove.push(node);
+    }
+    nodesToRemove.forEach((n) => bodyEl.removeChild(n));
+
+    const draftContainer = document.createElement('div');
+    draftContainer.innerHTML = draftHtml;
+    bodyEl.insertBefore(draftContainer, anchorChild);
+  } else {
+    bodyEl.innerHTML = draftHtml;
+  }
+
+  bodyEl.focus();
   bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
-  console.error(
-    '[ToneFit] 회신 초안 주입 — 길이:',
-    content.length,
-    '/ body 내용:',
-    bodyEl.innerText.slice(0, 50)
-  );
+  if (DEBUG)
+    console.error(
+      '[ToneFit] 회신 초안 주입 — 길이:',
+      content.length,
+      '/ body 내용:',
+      bodyEl.innerText.slice(0, 50)
+    );
 };
 
 /**
@@ -752,19 +775,20 @@ const injectReplyBody = (content: string, attempt = 0) => {
   const VERIFY_DELAY = 500;
 
   const bodyEl = getBodyElement();
-  console.error(
-    '[ToneFit] injectReplyBody — attempt:',
-    attempt,
-    '/ bodyEl:',
-    bodyEl?.id,
-    bodyEl?.getAttribute('aria-label')
-  );
+  if (DEBUG)
+    console.error(
+      '[ToneFit] injectReplyBody — attempt:',
+      attempt,
+      '/ bodyEl:',
+      bodyEl?.id,
+      bodyEl?.getAttribute('aria-label')
+    );
   if (!bodyEl) {
     if (attempt < MAX_ATTEMPTS) {
-      console.error('[ToneFit] body 없음 — 재시도:', attempt + 1);
+      if (DEBUG) console.error('[ToneFit] body 없음 — 재시도:', attempt + 1);
       setTimeout(() => injectReplyBody(content, attempt + 1), VERIFY_DELAY);
     } else {
-      console.error('[ToneFit] 회신 본문 영역 찾기 최종 실패');
+      if (DEBUG) console.error('[ToneFit] 회신 본문 영역 찾기 최종 실패');
     }
     return;
   }
@@ -775,13 +799,15 @@ const injectReplyBody = (content: string, attempt = 0) => {
   setTimeout(() => {
     if (!bodyEl.isConnected || bodyEl.innerText.trim()) return; // 정상이면 종료
     if (attempt < MAX_ATTEMPTS) {
-      console.error(
-        '[ToneFit] Gmail이 본문을 리셋했습니다. 재시도:',
-        attempt + 1
-      );
+      if (DEBUG)
+        console.error(
+          '[ToneFit] Gmail이 본문을 리셋했습니다. 재시도:',
+          attempt + 1
+        );
       injectReplyBody(content, attempt + 1);
     } else {
-      console.error('[ToneFit] 회신 초안 주입 최종 실패 (Gmail 리셋 반복)');
+      if (DEBUG)
+        console.error('[ToneFit] 회신 초안 주입 최종 실패 (Gmail 리셋 반복)');
     }
   }, VERIFY_DELAY);
 };
@@ -789,7 +815,7 @@ const injectReplyBody = (content: string, attempt = 0) => {
 const openComposeAndInject = async (subject: string, content: string) => {
   const composeBtn = document.querySelector<HTMLElement>(COMPOSE_BTN_SELECTOR);
   if (!composeBtn) {
-    console.error('[ToneFit] 편지쓰기 버튼을 찾을 수 없습니다');
+    if (DEBUG) console.error('[ToneFit] 편지쓰기 버튼을 찾을 수 없습니다');
     return;
   }
 
@@ -809,7 +835,7 @@ const openComposeAndInject = async (subject: string, content: string) => {
     }
   }
 
-  console.error('[ToneFit] 작성창이 열리지 않았습니다 (3초 초과)');
+  if (DEBUG) console.error('[ToneFit] 작성창이 열리지 않았습니다 (3초 초과)');
 };
 
 // ── 메시지 수신 ───────────────────────────────────────────────────
@@ -834,20 +860,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       isReply?: boolean;
     };
 
-    console.error(
-      '[ToneFit] INSERT_EMAIL 수신 — subject:',
-      subject,
-      '/ content 길이:',
-      content?.length,
-      '/ isReply:',
-      isReply,
-      '/ isComposeOpen:',
-      isComposeOpen()
-    );
-    console.error(
-      '[ToneFit] INSERT_EMAIL content 앞 200자:',
-      content?.slice(0, 200)
-    );
+    if (DEBUG)
+      console.error(
+        '[ToneFit] INSERT_EMAIL 수신 — subject:',
+        subject,
+        '/ content 길이:',
+        content?.length,
+        '/ isReply:',
+        isReply,
+        '/ isComposeOpen:',
+        isComposeOpen()
+      );
+    if (DEBUG)
+      console.error(
+        '[ToneFit] INSERT_EMAIL content 앞 200자:',
+        content?.slice(0, 200)
+      );
 
     if (isReply) {
       // Gmail 에디터 초기화 완료 대기 후 삽입 (즉시 삽입 시 init이 덮어쓰는 현상 방지)
@@ -855,7 +883,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     } else if (isComposeOpen()) {
       injectEmail(subject, content);
     } else {
-      console.error('[ToneFit] 작성창 없음 → openComposeAndInject 시도');
+      if (DEBUG)
+        console.error('[ToneFit] 작성창 없음 → openComposeAndInject 시도');
       openComposeAndInject(subject, content);
     }
     return;
