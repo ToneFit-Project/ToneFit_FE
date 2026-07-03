@@ -20,7 +20,9 @@ import {
   postCorrection,
   postCorrectionsRejections,
   postReplyAnalysis,
+  postReplySummary,
   postReply,
+  patchTermsAgreement,
   getMyProfile,
 } from '@ext/apiClient';
 import type {
@@ -47,37 +49,80 @@ type Screen = 'start' | 'terms' | 'main';
 // ── DEV 툴바 ─────────────────────────────────────────────────────────
 
 const SCREENS: Screen[] = ['start', 'terms', 'main'];
-const VIEWS: PanelView[] = [
-  'input',
-  'loading',
-  'success',
-  'error',
-  'correction-review',
-  'reply-loading-analysis',
-  'reply-input',
-  'reply-loading-write',
-  'reply-success',
-];
-const VIEW_LABELS: Record<PanelView, string> = {
-  input: 'input',
-  loading: 'load',
-  success: 'done',
-  error: 'err',
-  'correction-review': 'review',
-  'reply-loading-analysis': 'r-load',
-  'reply-input': 'r-input',
-  'reply-loading-write': 'r-write',
-  'reply-success': 'r-done',
+
+type DevViewItem = {
+  label: string;
+  view: PanelView;
+  mode: 'generate' | 'correct' | 'reply';
 };
-const ERROR_VARIANTS: ErrorVariant[] = [
+const VIEW_GROUPS: { label: string; views: DevViewItem[] }[] = [
+  {
+    label: '생성하기',
+    views: [
+      { label: 'input', view: 'input', mode: 'generate' },
+      { label: 'load', view: 'loading', mode: 'generate' },
+      { label: 'done', view: 'success', mode: 'generate' },
+      { label: 'err', view: 'error', mode: 'generate' },
+    ],
+  },
+  {
+    label: '교정하기',
+    views: [
+      { label: 'input', view: 'input', mode: 'correct' },
+      { label: 'review', view: 'correction-review', mode: 'correct' },
+      { label: 'no-item', view: 'no-correction', mode: 'correct' },
+      { label: 'load', view: 'loading', mode: 'correct' },
+      { label: 'done', view: 'success', mode: 'correct' },
+      { label: 'err', view: 'error', mode: 'correct' },
+    ],
+  },
+  {
+    label: '회신하기',
+    views: [
+      { label: 'call', view: 'reply-loading-analysis', mode: 'reply' },
+      { label: 'consent', view: 'reply-consent', mode: 'reply' },
+      { label: 'input', view: 'reply-input', mode: 'reply' },
+      { label: 'load', view: 'reply-loading-write', mode: 'reply' },
+      { label: 'done', view: 'reply-success', mode: 'reply' },
+      { label: 'err', view: 'error', mode: 'reply' },
+    ],
+  },
+];
+const GENERATE_ERROR_VARIANTS: ErrorVariant[] = [
   'generic',
   'session_expired',
   'rate_limited',
 ];
+const CORRECT_ERROR_VARIANTS: ErrorVariant[] = [
+  'generic',
+  'session_expired',
+  'rate_limited',
+];
+const REPLY_ERROR_VARIANTS_DEV: ErrorVariant[] = [
+  'session_expired',
+  'reply_empty',
+  'reply_no_quote',
+  'reply_too_long',
+  'reply_non_korean',
+  'reply_api_error',
+];
+const ERROR_VARIANTS_BY_MODE: Record<
+  'generate' | 'correct' | 'reply',
+  ErrorVariant[]
+> = {
+  generate: GENERATE_ERROR_VARIANTS,
+  correct: CORRECT_ERROR_VARIANTS,
+  reply: REPLY_ERROR_VARIANTS_DEV,
+};
 const ERROR_VARIANT_LABELS: Record<ErrorVariant, string> = {
   generic: 'generic',
   session_expired: 'session',
   rate_limited: 'rate',
+  reply_empty: 'empty',
+  reply_no_quote: 'no-quote',
+  reply_too_long: 'too-long',
+  reply_non_korean: 'non-ko',
+  reply_api_error: 'api-err',
 };
 
 const DevToolbar = ({
@@ -107,8 +152,6 @@ const DevToolbar = ({
 }) => {
   const [open, setOpen] = useState(false);
   const isErrorView = devView === 'error';
-  const showModeToggle =
-    isErrorView || devView === 'loading' || devView === 'success';
 
   return (
     <div className="fixed bottom-36 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-1.5">
@@ -139,26 +182,42 @@ const DevToolbar = ({
 
           {/* 뷰 강제 전환 (main 화면에서만) */}
           {screen === 'main' && (
-            <div className="flex flex-col gap-1">
-              <p className="text-2xs text-text-inverse/50 font-medium uppercase tracking-wide">
-                View
-              </p>
-              <div className="flex gap-1 flex-wrap">
-                {VIEWS.map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => onViewChange(devView === v ? undefined : v)}
-                    className={`text-2xs rounded px-1.5 py-1 transition-colors cursor-pointer ${
-                      devView === v
-                        ? 'bg-background-brand text-text-inverse'
-                        : 'bg-background-inverse/30 text-text-inverse/70 hover:bg-background-inverse/50'
-                    }`}
-                  >
-                    {VIEW_LABELS[v]}
-                  </button>
-                ))}
-              </div>
+            <div className="flex flex-col gap-2">
+              {VIEW_GROUPS.map((group) => (
+                <div key={group.label} className="flex flex-col gap-1">
+                  <p className="text-2xs text-text-inverse/50 font-medium uppercase tracking-wide">
+                    {group.label}
+                  </p>
+                  <div className="flex gap-1 flex-wrap">
+                    {group.views.map((item) => {
+                      const isActive =
+                        devView === item.view && devPanelMode === item.mode;
+                      return (
+                        <button
+                          key={`${item.mode}-${item.view}`}
+                          type="button"
+                          onClick={() => {
+                            if (isActive) {
+                              onViewChange(undefined);
+                              onPanelModeChange(undefined);
+                            } else {
+                              onViewChange(item.view);
+                              onPanelModeChange(item.mode);
+                            }
+                          }}
+                          className={`text-2xs rounded px-1.5 py-1 transition-colors cursor-pointer ${
+                            isActive
+                              ? 'bg-background-brand text-text-inverse'
+                              : 'bg-background-inverse/30 text-text-inverse/70 hover:bg-background-inverse/50'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -168,8 +227,8 @@ const DevToolbar = ({
               <p className="text-2xs text-text-inverse/50 font-medium uppercase tracking-wide">
                 Error
               </p>
-              <div className="flex gap-1">
-                {ERROR_VARIANTS.map((v) => (
+              <div className="flex gap-1 flex-wrap">
+                {ERROR_VARIANTS_BY_MODE[devPanelMode ?? 'generate'].map((v) => (
                   <button
                     key={v}
                     type="button"
@@ -200,37 +259,6 @@ const DevToolbar = ({
               📨 Mock 교정 주입
             </button>
           </div>
-
-          {/* 모드 전환 (error / loading 뷰에서 메시지 확인용) */}
-          {screen === 'main' && showModeToggle && (
-            <div className="flex flex-col gap-1">
-              <p className="text-2xs text-text-inverse/50 font-medium uppercase tracking-wide">
-                Mode
-              </p>
-              <div className="flex gap-1">
-                {(['generate', 'correct', 'reply'] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() =>
-                      onPanelModeChange(devPanelMode === m ? undefined : m)
-                    }
-                    className={`flex-1 text-2xs rounded px-1.5 py-1 transition-colors cursor-pointer ${
-                      devPanelMode === m
-                        ? 'bg-background-brand-subtle text-text-brand'
-                        : 'bg-background-inverse/30 text-text-inverse/70 hover:bg-background-inverse/50'
-                    }`}
-                  >
-                    {m === 'generate'
-                      ? '생성'
-                      : m === 'correct'
-                        ? '교정'
-                        : '회신'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -261,7 +289,6 @@ const DevToolbar = ({
 
 // ── DEV 전용 기능 노출 여부 — 배포 전 false로 변경 ──────────────────
 const SHOW_DEV_TOOLBAR = false;
-const SHOW_DEV_LOGIN_SKIP = false;
 
 // 약관 버전 — 서버와 맞춰야 함
 const TERMS_VERSION = '1.0';
@@ -294,14 +321,25 @@ const Panel = () => {
   // 현재 활성 Gmail 탭 ID — 메시지 전송 대상 특정용
   const activeTabIdRef = useRef<number | null>(null);
 
+  // 회신 분석 요청 취소용 AbortController
+  const replyAbortControllerRef = useRef<AbortController | null>(null);
+
   // 현재 탭이 Gmail인지 여부 — 오버레이 표시용
   const [isGmailTab, setIsGmailTab] = useState<boolean>(true);
 
   // 회신 모드 진입 시 background에서 전달된 메일 데이터 (state → re-render 유발)
+  const [_requestedReplyData, setRequestedReplyData] = useState<{
+    mails: ReplyMail[];
+    to?: string[];
+    cc?: string[];
+  } | null>(null);
+  const [replyTriggerKey, setReplyTriggerKey] = useState(0);
   const [replyData, setReplyData] = useState<{
     mails: ReplyMail[];
     to?: string[];
     cc?: string[];
+    subject?: string;
+    replyError?: string;
   } | null>(null);
 
   // ── 앱 초기화: 저장된 토큰 확인 + 활성 탭 ID 저장 ──────────────
@@ -360,7 +398,13 @@ const Panel = () => {
         chrome.runtime.sendMessage(
           { type: 'GET_REPLY_DATA' },
           (resp: {
-            data: { mails: ReplyMail[]; to?: string[]; cc?: string[] } | null;
+            data: {
+              mails: ReplyMail[];
+              to?: string[];
+              cc?: string[];
+              subject?: string;
+              replyError?: string;
+            } | null;
           }) => {
             const replyPayload = resp?.data ?? null;
             if (replyPayload) setReplyData(replyPayload);
@@ -438,6 +482,28 @@ const Panel = () => {
         );
         setRequestedPanelMode(mode);
       }
+      // 패널이 이미 열린 상태에서 회신 아이콘 재클릭 시
+      if (message.type === 'REPLY_DATA_READY') {
+        chrome.runtime.sendMessage(
+          { type: 'GET_REPLY_DATA' },
+          (resp: {
+            data: {
+              mails: ReplyMail[];
+              to?: string[];
+              cc?: string[];
+              subject?: string;
+              replyError?: string;
+            } | null;
+          }) => {
+            const payload = resp?.data ?? null;
+            if (payload) {
+              setReplyData(payload);
+              setRequestedReplyData(payload);
+              setReplyTriggerKey((k) => k + 1);
+            }
+          }
+        );
+      }
     };
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
@@ -447,42 +513,53 @@ const Panel = () => {
 
   const dismissTooltip = useCallback(() => setShowTooltip(false), []);
 
-  const goToMain = useCallback((showTip = false) => {
-    // Gmail 본문 내용 유무에 따라 초기 모드 결정 → 결정 후 화면 전환
-    chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then((tabs) => {
-        const tabId = tabs[0]?.id;
-        if (!tabId) {
-          setScreen('main');
-          if (showTip) setShowTooltip(true);
-          return;
-        }
-        chrome.tabs.sendMessage(
-          tabId,
-          { type: 'GET_EMAIL_CONTENT' },
-          (response) => {
-            if (chrome.runtime.lastError) {
-              console.error(
-                '[ToneFit] GET_EMAIL_CONTENT 실패:',
-                chrome.runtime.lastError.message
-              );
-            } else {
-              const userLength =
-                response?.userLength ?? (response?.content ?? '').trim().length;
-              devLog('[ToneFit] 사용자 입력 글자수(서명 제외):', userLength);
-              setInitialPanelMode(userLength >= 40 ? 'correct' : 'generate');
-            }
+  const goToMain = useCallback(
+    (showTip = false) => {
+      // Gmail 본문 내용 유무에 따라 초기 모드 결정 → 결정 후 화면 전환
+      chrome.tabs
+        .query({ active: true, currentWindow: true })
+        .then((tabs) => {
+          const tabId = tabs[0]?.id;
+          if (!tabId) {
             setScreen('main');
             if (showTip) setShowTooltip(true);
+            return;
           }
-        );
-      })
-      .catch(() => {
-        setScreen('main');
-        if (showTip) setShowTooltip(true);
-      });
-  }, []);
+          chrome.tabs.sendMessage(
+            tabId,
+            { type: 'GET_EMAIL_CONTENT' },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                console.error(
+                  '[ToneFit] GET_EMAIL_CONTENT 실패:',
+                  chrome.runtime.lastError.message
+                );
+              } else {
+                const userLength =
+                  response?.userLength ??
+                  (response?.content ?? '').trim().length;
+                devLog('[ToneFit] 사용자 입력 글자수(서명 제외):', userLength);
+                // replyData가 있으면 회신 모드 우선
+                setInitialPanelMode(
+                  replyData
+                    ? 'reply'
+                    : userLength >= 40
+                      ? 'correct'
+                      : 'generate'
+                );
+              }
+              setScreen('main');
+              if (showTip) setShowTooltip(true);
+            }
+          );
+        })
+        .catch(() => {
+          setScreen('main');
+          if (showTip) setShowTooltip(true);
+        });
+    },
+    [replyData]
+  );
 
   // ── Google 로그인 ────────────────────────────────────────────────
 
@@ -595,13 +672,80 @@ const Panel = () => {
 
   const handleReplyAnalysisRequest = useCallback(
     async (mails: ReplyMail[], to?: string[], cc?: string[]) => {
-      return await postReplyAnalysis({ mails, to, cc });
+      const controller = new AbortController();
+      replyAbortControllerRef.current = controller;
+      const tabId = activeTabIdRef.current;
+      chrome.runtime.sendMessage({ type: 'GENERATION_START', tabId });
+      const data = { mails, to, cc };
+      try {
+        const [analysis, summaryRes] = await Promise.all([
+          postReplyAnalysis(data, controller.signal),
+          postReplySummary(data, controller.signal),
+        ]);
+        // 분석 완료 → 오버레이 해제
+        chrome.runtime.sendMessage({ type: 'GENERATION_ERROR', tabId });
+        return { analysis, summaries: summaryRes.summaries };
+      } catch (err) {
+        chrome.runtime.sendMessage({ type: 'GENERATION_ERROR', tabId });
+        if (
+          (err as { name?: string })?.name === 'CanceledError' ||
+          (err as { name?: string })?.name === 'AbortError'
+        ) {
+          return { analysis: null, summaries: [] };
+        }
+        const errObj = err as {
+          response?: { status?: number; data?: { error?: { code?: string } } };
+        };
+        const status = errObj?.response?.status;
+        const code = errObj?.response?.data?.error?.code;
+        // 약관 미동의
+        if (code === 'TERMS_AGREEMENT_REQUIRED') {
+          throw Object.assign(new Error('TERMS_AGREEMENT_REQUIRED'), {
+            _termsRequired: true,
+          });
+        }
+        // 429 Rate Limited
+        if (status === 429) {
+          throw Object.assign(new Error('REPLY_API_ERROR'), {
+            _replyApiError: true,
+          });
+        }
+        // 502 Bad Gateway
+        if (status === 502) {
+          throw Object.assign(new Error('REPLY_API_ERROR'), {
+            _replyApiError: true,
+          });
+        }
+        throw err;
+      }
     },
     []
   );
 
+  const handleReplyAnalysisCancel = useCallback(() => {
+    replyAbortControllerRef.current?.abort();
+    replyAbortControllerRef.current = null;
+    window.close();
+  }, []);
+
+  const handleAgreeMailRead = useCallback(async () => {
+    await patchTermsAgreement('MAIL_READ', true);
+  }, []);
+
   const handleReplyWriteRequest = useCallback(async (req: ReplyRequest) => {
-    return await postReply(req);
+    chrome.runtime.sendMessage({
+      type: 'GENERATION_START',
+      tabId: activeTabIdRef.current,
+    });
+    try {
+      return await postReply(req);
+    } catch (err) {
+      chrome.runtime.sendMessage({
+        type: 'GENERATION_ERROR',
+        tabId: activeTabIdRef.current,
+      });
+      throw err;
+    }
   }, []);
 
   /** 교정 시작 전 사전 검증 — 케이스별 에러 타입 throw */
@@ -837,11 +981,7 @@ const Panel = () => {
           </div>
         )}
         {screen === 'start' && (
-          <StartView
-            onGoogleLogin={handleGoogleLogin}
-            onSkip={SHOW_DEV_LOGIN_SKIP ? () => setScreen('terms') : undefined}
-            error={authError}
-          />
+          <StartView onGoogleLogin={handleGoogleLogin} error={authError} />
         )}
         {screen === 'terms' && (
           <TermsView onComplete={handleTermsComplete} error={authError} />
@@ -878,16 +1018,34 @@ const Panel = () => {
               replyMails={replyData?.mails}
               replyTo={replyData?.to}
               replyCc={replyData?.cc}
+              replySubject={replyData?.subject}
+              replyError={replyData?.replyError}
+              replyTriggerKey={replyTriggerKey}
               onReplyAnalysisRequest={handleReplyAnalysisRequest}
+              onReplyAnalysisCancel={handleReplyAnalysisCancel}
+              onAgreeMailRead={handleAgreeMailRead}
               onReplyWriteRequest={handleReplyWriteRequest}
               onReplySuccess={(subject, content) => {
+                console.error(
+                  '[ToneFit] onReplySuccess — subject:',
+                  subject,
+                  '/ content 길이:',
+                  content?.length
+                );
+                console.error(
+                  '[ToneFit] onReplySuccess content 앞 200자:',
+                  content?.slice(0, 200)
+                );
+                console.error('[ToneFit] activeTabId:', activeTabIdRef.current);
                 chrome.tabs.sendMessage(activeTabIdRef.current!, {
                   type: 'INSERT_EMAIL',
                   subject,
                   content,
+                  isReply: true,
                   tabId: activeTabIdRef.current,
                 });
               }}
+              onNoCorrectionConfirm={() => window.close()}
             />
           </div>
         )}
