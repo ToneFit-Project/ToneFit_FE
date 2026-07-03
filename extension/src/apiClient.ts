@@ -210,7 +210,11 @@ export const postReplyAnalysis = async (
 
 /** 회신 작성 */
 export const postReply = async (data: ReplyRequest): Promise<ReplyResponse> => {
-  console.error('[ToneFit] postReply payload:', JSON.stringify(data, null, 2));
+  if (DEBUG)
+    console.error(
+      '[ToneFit] postReply payload:',
+      JSON.stringify(data, null, 2)
+    );
   try {
     const response = await withReauth((headers) =>
       axios.post<unknown>(`${API_URL}/replies`, data, {
