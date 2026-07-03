@@ -27,6 +27,7 @@ import type {
   UserProfile,
   ReplyAnalysisRequest,
   ReplyAnalysisResponse,
+  ReplySummaryResponse,
   ReplyRequest,
   ReplyResponse,
 } from '@/types';
@@ -163,14 +164,45 @@ export const postCorrectionsRejections = async (
   return unwrap<CorrectionsRejectionsResponse>(response.data);
 };
 
+/** 약관 동의/철회 */
+export const patchTermsAgreement = async (
+  type: TermsType,
+  agreed: boolean
+): Promise<void> => {
+  await withReauth((headers) =>
+    axios.patch<unknown>(
+      `${API_URL}/users/me/terms/${type}`,
+      { agreed },
+      { headers }
+    )
+  );
+};
+
+/** 회신 요약 */
+export const postReplySummary = async (
+  data: ReplyAnalysisRequest,
+  signal?: AbortSignal
+): Promise<ReplySummaryResponse> => {
+  const response = await withReauth((headers) =>
+    axios.post<unknown>(`${API_URL}/replies/summary`, data, {
+      headers,
+      timeout: 60000,
+      signal,
+    })
+  );
+  return unwrap<ReplySummaryResponse>(response.data);
+};
+
 /** 회신 파악 */
 export const postReplyAnalysis = async (
-  data: ReplyAnalysisRequest
+  data: ReplyAnalysisRequest,
+  signal?: AbortSignal
 ): Promise<ReplyAnalysisResponse> => {
   const response = await withReauth((headers) =>
     axios.post<unknown>(`${API_URL}/replies/analysis`, data, {
       headers,
       timeout: 60000,
+      signal,
     })
   );
   return unwrap<ReplyAnalysisResponse>(response.data);
@@ -178,10 +210,25 @@ export const postReplyAnalysis = async (
 
 /** 회신 작성 */
 export const postReply = async (data: ReplyRequest): Promise<ReplyResponse> => {
-  const response = await withReauth((headers) =>
-    axios.post<unknown>(`${API_URL}/replies`, data, { headers, timeout: 60000 })
-  );
-  return unwrap<ReplyResponse>(response.data);
+  console.error('[ToneFit] postReply payload:', JSON.stringify(data, null, 2));
+  try {
+    const response = await withReauth((headers) =>
+      axios.post<unknown>(`${API_URL}/replies`, data, {
+        headers,
+        timeout: 60000,
+      })
+    );
+    return unwrap<ReplyResponse>(response.data);
+  } catch (err) {
+    const e = err as { response?: { status?: number; data?: unknown } };
+    console.error(
+      '[ToneFit] postReply 에러 — status:',
+      e?.response?.status,
+      'body:',
+      JSON.stringify(e?.response?.data)
+    );
+    throw err;
+  }
 };
 
 /** 이메일 생성 */

@@ -19,6 +19,8 @@ let pendingReplyData: {
   mails: { sender: string; body: string }[];
   to?: string[];
   cc?: string[];
+  subject?: string;
+  replyError?: string;
 } | null = null;
 
 const sendToTab = (tabId: number, message: unknown) => {
@@ -81,11 +83,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       mails: message.mails ?? [],
       to: message.to,
       cc: message.cc,
+      subject: message.subject,
+      replyError: message.replyError,
     };
     if (tabId !== null && tabId !== undefined) {
       chrome.sidePanel
         .open({ tabId })
-        .then(() => sendToTab(tabId, { type: 'PANEL_OPENED' }))
+        .then(() => {
+          sendToTab(tabId, { type: 'PANEL_OPENED' });
+          // 패널이 이미 열려 있을 때도 새 회신 데이터를 인지할 수 있도록 알림
+          chrome.runtime
+            .sendMessage({ type: 'REPLY_DATA_READY' })
+            .catch(() => {});
+        })
         .catch(console.error);
     }
     return true;
