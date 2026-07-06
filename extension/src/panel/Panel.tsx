@@ -105,6 +105,7 @@ const REPLY_ERROR_VARIANTS_DEV: ErrorVariant[] = [
   'reply_too_long',
   'reply_non_korean',
   'reply_api_error',
+  'reply_extract_error',
 ];
 const ERROR_VARIANTS_BY_MODE: Record<
   'generate' | 'correct' | 'reply',
@@ -123,6 +124,7 @@ const ERROR_VARIANT_LABELS: Record<ErrorVariant, string> = {
   reply_too_long: 'too-long',
   reply_non_korean: 'non-ko',
   reply_api_error: 'api-err',
+  reply_extract_error: 'extract-err',
 };
 
 const DevToolbar = ({

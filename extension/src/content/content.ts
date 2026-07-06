@@ -266,74 +266,141 @@ const injectToolbarButton = (composeEl: HTMLElement): boolean => {
         });
       };
 
+      // ── 헬퍼: 블록 인지 텍스트 추출 (detached 노드용 innerText 대체) ──
+      const tfText = (root: Element): string => {
+        const BLOCK =
+          /^(DIV|P|LI|TR|TD|BLOCKQUOTE|H[1-6]|PRE|TABLE|UL|OL|SECTION|ARTICLE|HEADER|FOOTER)$/;
+        let out = '';
+        const walk = (nd: Node) => {
+          if (nd.nodeType === 3) {
+            out += nd.textContent;
+            return;
+          }
+          if (nd.nodeType !== 1) return;
+          const el = nd as Element;
+          const tg = el.tagName;
+          if (
+            tg === 'STYLE' ||
+            tg === 'SCRIPT' ||
+            tg === 'TITLE' ||
+            tg === 'NOSCRIPT'
+          )
+            return;
+          if (tg === 'BR') {
+            out += '\n';
+            return;
+          }
+          const bl = BLOCK.test(tg);
+          if (bl && out && !out.endsWith('\n')) out += '\n';
+          for (const c of nd.childNodes) walk(c);
+          if (bl && out && !out.endsWith('\n')) out += '\n';
+        };
+        walk(root);
+        return out
+          .replace(/\u00a0/g, ' ')
+          .replace(/[ \t]+\n/g, '\n')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+      };
+
+      // ── 헬퍼: 중첩 gmail_quote를 최근 maxMails건 분리 (최신 우선) ──
+      const SIG = '.gmail_signature,[data-smartmail="gmail_signature"]';
+      const tfSplit = (
+        rootQuote: Element,
+        maxMails: number
+      ): { sender: string; body: string }[] => {
+        const acc: { sender: string; body: string }[] = [];
+        let cur: Element | null = rootQuote;
+        while (cur && acc.length < maxMails) {
+          const attrEl = cur.querySelector('.gmail_attr');
+          const ownAttr =
+            attrEl && attrEl.closest('.gmail_quote') === cur ? attrEl : null;
+          const sender = ownAttr
+            ? (ownAttr.textContent ?? '').trim().replace(/\s+/g, ' ')
+            : '발신자 미상';
+          const bq: Element | null = cur.matches('blockquote')
+            ? cur
+            : cur.querySelector(':scope > blockquote.gmail_quote');
+          if (bq) {
+            const clone = bq.cloneNode(true) as Element;
+            clone
+              .querySelectorAll(`.gmail_quote,.gmail_attr,${SIG}`)
+              .forEach((x) => x.remove());
+            const body = tfText(clone);
+            if (body) acc.push({ sender, body });
+            cur = bq.querySelector('.gmail_quote');
+          } else {
+            // 비표준(Fwd/모바일): 하위 .gmail_quote 제거 없이 병합 1건 보존 후 종료
+            const clone = cur.cloneNode(true) as Element;
+            const a2 = clone.querySelector('.gmail_attr');
+            if (a2 && a2.closest('.gmail_quote') === clone) a2.remove();
+            clone.querySelectorAll(SIG).forEach((x) => x.remove());
+            const body = tfText(clone);
+            if (body) acc.push({ sender, body });
+            cur = null;
+          }
+        }
+        return acc;
+      };
+
       // ── 본문 추출 ─────────────────────────────────────────────────
       // Case A: 버튼 클릭 후 → contenteditable에 .gmail_quote 존재
       // Case B: 버튼 클릭 전 → hidden input[name="uet"]에 인코딩된 HTML로 존재
-      let sender = '발신자 미상';
-      let body = '';
+      let mails: { sender: string; body: string }[] = [];
+      const noQuote =
+        !quoteEl &&
+        !composeEl.querySelector<HTMLInputElement>('input[name="uet"]')?.value;
 
-      if (quoteEl) {
-        // Case A: contenteditable에서 직접 추출
-        const attrEl = quoteEl.querySelector<HTMLElement>('.gmail_attr');
-        sender = attrEl?.innerText?.trim() ?? '발신자 미상';
-        const clone = quoteEl.cloneNode(true) as HTMLElement;
-        clone.querySelector('.gmail_attr')?.remove();
-        body = clone.innerText.trim() || quoteEl.innerText.trim();
-      } else {
-        // Case B: input[name="uet"] 파싱
-        const uetInput =
-          composeEl.querySelector<HTMLInputElement>('input[name="uet"]');
-        if (uetInput?.value) {
-          const parsed = new DOMParser().parseFromString(
-            uetInput.value,
-            'text/html'
-          );
-          const parsedQuote = parsed.querySelector<HTMLElement>('.gmail_quote');
-          if (parsedQuote) {
-            const attrEl =
-              parsedQuote.querySelector<HTMLElement>('.gmail_attr');
-            sender = attrEl?.innerText?.trim() ?? '발신자 미상';
-            attrEl?.remove();
-            body = parsedQuote.innerText.trim();
+      try {
+        if (quoteEl) {
+          mails = tfSplit(quoteEl, 3);
+        } else {
+          const uetInput =
+            composeEl.querySelector<HTMLInputElement>('input[name="uet"]');
+          if (uetInput?.value) {
+            const parsed = new DOMParser().parseFromString(
+              uetInput.value,
+              'text/html'
+            );
+            const parsedQuote = parsed.querySelector('.gmail_quote');
+            if (parsedQuote) mails = tfSplit(parsedQuote, 3);
           }
         }
+      } catch {
+        openReplyError('REPLY_EXTRACT_ERROR');
+        return;
       }
 
       if (DEBUG)
         console.error(
-          '[ToneFit] reply 추출 — sender:',
-          sender,
-          '/ body 길이:',
-          body.length
+          '[ToneFit] reply 추출 — mails:',
+          mails.length,
+          '건',
+          mails.map((m) => `${m.sender}(${m.body.length}자)`)
         );
 
-      // 본문이 완전히 비어있는 경우 — quoteEl/uet 모두 없으면 대화 없음, 있는데 내용만 없으면 읽기 실패
-      if (!body) {
-        openReplyError(
-          !quoteEl &&
-            !composeEl.querySelector<HTMLInputElement>('input[name="uet"]')
-              ?.value
-            ? 'REPLY_NO_QUOTE'
-            : 'REPLY_EMPTY'
-        );
+      // 본문이 완전히 비어있는 경우
+      if (!mails.length) {
+        openReplyError(noQuote ? 'REPLY_NO_QUOTE' : 'REPLY_EMPTY');
         return;
       }
 
-      // 너무 길다 (1000자 초과)
-      if (body.length > 1000) {
+      // 최신 메일 단독 10,000자 초과
+      if (mails[0].body.length > 10_000) {
         openReplyError('REPLY_TOO_LONG');
         return;
       }
 
-      // 한국어 아님 (가-힣 문자가 하나도 없는 경우)
-      if (!/[가-힣]/.test(body)) {
+      // 한국어 아님 (최신 메일 기준)
+      if (!/[가-힣]/.test(mails[0].body)) {
         openReplyError('REPLY_NON_KOREAN');
         return;
       }
 
+      // 시간순(오래된→최신)으로 뒤집어 전송 — BE 계약: 마지막 원소 = 답장 누른 메일
       chrome.runtime.sendMessage({
         type: 'OPEN_SIDE_PANEL_REPLY',
-        mails: [{ sender, body }],
+        mails: mails.slice().reverse(),
         subject: subject || hiddenSubject || undefined,
       });
       return;

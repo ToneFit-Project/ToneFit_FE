@@ -1232,7 +1232,8 @@ export type ReplyErrorVariant =
   | 'reply_no_quote'
   | 'reply_too_long'
   | 'reply_non_korean'
-  | 'reply_api_error';
+  | 'reply_api_error'
+  | 'reply_extract_error';
 
 export type ErrorVariant =
   | 'generic'
@@ -1246,6 +1247,7 @@ const REPLY_ERROR_VARIANTS = new Set<string>([
   'reply_too_long',
   'reply_non_korean',
   'reply_api_error',
+  'reply_extract_error',
 ]);
 
 const REPLY_ERROR_CONFIG: Record<
@@ -1271,6 +1273,10 @@ const REPLY_ERROR_CONFIG: Record<
   reply_api_error: {
     title: '요청이 많아 잠시 쉬어갈게요.',
     desc: '잠시 후 다시 시도해 주세요.',
+  },
+  reply_extract_error: {
+    title: '메일 내용을 읽지 못했어요.',
+    desc: '대화를 펼친 뒤 다시 시도해 주세요.',
   },
 };
 
@@ -2472,6 +2478,7 @@ const ToneFitPanel = ({
     REPLY_TOO_LONG: 'reply_too_long',
     REPLY_NON_KOREAN: 'reply_non_korean',
     REPLY_API_ERROR: 'reply_api_error',
+    REPLY_EXTRACT_ERROR: 'reply_extract_error',
   };
 
   // reply 모드: 패널 열릴 때 자동으로 분석 시작 / 패널 열린 상태에서 재요청 시 재시작
