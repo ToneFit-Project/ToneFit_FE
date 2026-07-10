@@ -15,6 +15,7 @@ import {
   TitleText,
   Icon,
   Chip,
+  ChipV2,
   TextField,
   Button,
   ButtonGroup,
@@ -24,6 +25,14 @@ import {
   ButtonTwoWayV2,
 } from '@/components/ui';
 import type { IconName, StepNumber } from '@/components/ui';
+import {
+  MailPackingIcon,
+  AIPencilWritingIcon,
+  LoginExpiredIcon,
+  ErrorNoticeIcon,
+  MailReadingIcon,
+  NoCorrectionIcon,
+} from '@/components/ui/MotionIcons';
 
 // ─────────────────────────────────────────────────────────────────
 // 내부 레이아웃 헬퍼 컴포넌트 (이 파일에서만 사용)
@@ -155,6 +164,30 @@ const BTN_CASES: {
   { label: 'Success', variant: 'success', text: 'Success' },
   { label: 'Danger', variant: 'danger', text: 'Danger' },
 ];
+
+// ChipV2 인터랙티브 그룹
+const ChipV2Group = () => {
+  const [selected, setSelected] = useState<string | null>('boss');
+  const options = [
+    { value: 'boss', label: '상사' },
+    { value: 'colleague', label: '동료' },
+    { value: 'partner', label: '협력사' },
+    { value: 'client', label: '고객 & 거래처' },
+  ];
+  return (
+    <div className="flex flex-wrap gap-3">
+      {options.map((opt) => (
+        <ChipV2
+          key={opt.value}
+          selected={selected === opt.value}
+          onClick={() => setSelected(selected === opt.value ? null : opt.value)}
+        >
+          {opt.label}
+        </ChipV2>
+      ))}
+    </div>
+  );
+};
 
 // ButtonTwoWayV2 상태를 갖는 인라인 래퍼
 const ButtonTwoWayV2ViewToggle = () => {
@@ -671,6 +704,90 @@ const ComponentPage = () => {
               </div>
             </Case>
           </CaseRow>
+        </Section>
+
+        {/* ────────────────────────────────── ChipV2 ─── */}
+        <Section
+          title="ChipV2"
+          description="선택 칩 v2 — size(sm/md) · selected · disabled. hover 상태는 마우스를 올려 확인하세요."
+        >
+          <CaseRow>
+            <Case label="미선택 / size='sm'">
+              <ChipV2 selected={false} size="sm">
+                요청
+              </ChipV2>
+            </Case>
+            <Case label="선택됨 / size='sm'">
+              <ChipV2 selected size="sm">
+                보고
+              </ChipV2>
+            </Case>
+            <Case label="미선택 / size='md'">
+              <ChipV2 selected={false} size="md">
+                요청
+              </ChipV2>
+            </Case>
+            <Case label="선택됨 / size='md'">
+              <ChipV2 selected size="md">
+                보고
+              </ChipV2>
+            </Case>
+            <Case label="비활성화 / sm">
+              <ChipV2 disabled size="sm">
+                보고
+              </ChipV2>
+            </Case>
+            <Case label="비활성화 / md">
+              <ChipV2 disabled size="md">
+                보고
+              </ChipV2>
+            </Case>
+          </CaseRow>
+
+          <SectionDivider />
+
+          <Case label="인터랙티브 — 목적 선택 예시 (size='sm')">
+            <ChipV2Group />
+          </Case>
+        </Section>
+
+        {/* ────────────────────────────── MotionIcons ─── */}
+        <Section
+          title="MotionIcons"
+          description="애니메이션 SVG 아이콘. 로딩·에러·안내 상황에서 사용합니다."
+        >
+          <div className="grid grid-cols-5 gap-8">
+            <Case label="MailPackingIcon (size=88)">
+              <div className="flex justify-center">
+                <MailPackingIcon size={88} />
+              </div>
+            </Case>
+            <Case label="AIPencilWritingIcon (size=120)">
+              <div className="flex justify-center">
+                <AIPencilWritingIcon size={120} />
+              </div>
+            </Case>
+            <Case label="LoginExpiredIcon (size=120)">
+              <div className="flex justify-center">
+                <LoginExpiredIcon size={120} />
+              </div>
+            </Case>
+            <Case label="ErrorNoticeIcon (size=120)">
+              <div className="flex justify-center">
+                <ErrorNoticeIcon size={120} />
+              </div>
+            </Case>
+            <Case label="MailReadingIcon (size=60)">
+              <div className="flex justify-center">
+                <MailReadingIcon size={60} />
+              </div>
+            </Case>
+            <Case label="NoCorrectionIcon (size=120)">
+              <div className="flex justify-center">
+                <NoCorrectionIcon size={120} />
+              </div>
+            </Case>
+          </div>
         </Section>
       </div>
       {/* end 섹션 목록 */}

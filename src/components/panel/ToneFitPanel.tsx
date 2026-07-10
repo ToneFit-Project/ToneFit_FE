@@ -43,9 +43,14 @@ import type {
   CorrectionsRejectionItem,
 } from '@/types';
 import imgPanelIcon from '@/assets/mail-logo.svg';
-import iconAiPencil from '@/assets/aiPencil.svg';
-import iconExclamation from '@/assets/icon/icon-exclamation.svg';
-import { MailPackingIcon, MailReadingIcon } from '@/components/ui/MotionIcons';
+import {
+  MailPackingIcon,
+  MailReadingIcon,
+  ErrorNoticeIcon,
+  LoginExpiredIcon,
+  AIPencilWritingIcon,
+  NoCorrectionIcon,
+} from '@/components/ui/MotionIcons';
 import { devLog } from '@/utils/devLogger';
 
 // =============================================================
@@ -74,6 +79,31 @@ const EMAIL_MAX = 200;
 /** [DEV ONLY] 교정 리뷰 화면 미리보기용 mock 데이터 */
 const DEV_MOCK_ORIGINAL =
   '팀장님, 보고서 확인해주세요. 문제 있으면 알려주세요.';
+
+const DEV_MOCK_REPLY_ANALYSIS: import('@/types').ReplyAnalysisResponse = {
+  conversation:
+    '김팀장이 프로젝트 일정 조정 가능 여부를 문의했고, 추가로 예산 확인도 요청했습니다.',
+  recipient: {
+    type: 'DIRECT_SUPERVISOR',
+    label: '상사',
+    confidence: 'high',
+    reason: '발신인이 팀장 직함을 사용하고 있습니다.',
+  },
+  questions: [
+    { id: 1, question: '프로젝트 일정 조정이 가능한가요?' },
+    { id: 2, question: '예산 변경 사항이 있나요?' },
+    { id: 3, question: '추가로 전달해야 할 사항이 있나요?' },
+  ],
+};
+
+const DEV_MOCK_REPLY_SUMMARIES: import('@/types').ReplySummaryItem[] = [
+  { order: 1, sender: '김팀장', summary: '프로젝트 일정 조정 가능 여부 문의' },
+  {
+    order: 2,
+    sender: '김팀장',
+    summary: '예산 항목 확인 요청 및 다음 주 회의 일정 조율 제안',
+  },
+];
 const DEV_MOCK_CHANGES: import('@/types').CorrectionChange[] = [
   {
     index: 0,
@@ -143,7 +173,9 @@ export type PanelView =
   | 'success'
   | 'error'
   | 'correction-review'
+  | 'no-correction'
   | 'reply-loading-analysis'
+  | 'reply-consent'
   | 'reply-input'
   | 'reply-loading-write'
   | 'reply-success';
@@ -247,18 +279,33 @@ export interface ToneFitPanelProps {
   replyMails?: import('@/types').ReplyMail[];
   replyTo?: string[];
   replyCc?: string[];
-  /** 회신 분석 요청 함수 */
+  /** 답장 중인 원본 메일 제목 */
+  replySubject?: string;
+  /** 패널이 열린 상태에서 회신 재요청 시 증가 — 새 플로우를 강제 재시작 */
+  replyTriggerKey?: number;
+  /** content script에서 감지한 회신 사전 검증 에러 코드 */
+  replyError?: string;
+  /** 회신 분석 요청 함수 (summary + analysis 병렬 호출) */
   onReplyAnalysisRequest?: (
     mails: import('@/types').ReplyMail[],
     to?: string[],
     cc?: string[]
-  ) => Promise<import('@/types').ReplyAnalysisResponse>;
+  ) => Promise<{
+    analysis: import('@/types').ReplyAnalysisResponse | null;
+    summaries: import('@/types').ReplySummaryItem[];
+  }>;
+  /** 회신 분석 중 중단하기 — 요청 abort 후 패널 닫기 */
+  onReplyAnalysisCancel?: () => void;
+  /** MAIL_READ 약관 동의 함수 (동의 후 회신 플로우 재시작) */
+  onAgreeMailRead?: () => Promise<void>;
   /** 회신 작성 요청 함수 */
   onReplyWriteRequest?: (
     data: import('@/types').ReplyRequest
   ) => Promise<import('@/types').ReplyResponse>;
   /** 회신 완료 콜백 */
   onReplySuccess?: (subject: string, content: string) => void;
+  /** 교정 항목 없음 화면의 "확인" 버튼 콜백 */
+  onNoCorrectionConfirm?: () => void;
 }
 
 // =============================================================
@@ -276,43 +323,34 @@ const getLoadingMessage = (
 };
 
 // =============================================================
-// 로딩 애니메이션 — 쓰기 동작 (Figma node 3188-2121)
-// =============================================================
-
-/**
- * AI 연필이 점을 하나씩 "써나가는" 4단계 애니메이션
- *
- * pen → dot1 → dot2 → dot3 → pen → ...
- *
- * 연필은 점이 추가될수록 좌측으로 이동 (쓰기 동작),
- * pen 상태로 돌아올 때는 즉시 복귀 (새 획 시작).
- */
-type WritingStep = 'pen' | 'dot1' | 'dot2' | 'dot3';
-const WRITING_STEPS: WritingStep[] = ['pen', 'dot1', 'dot2', 'dot3'];
-/** 각 스텝 유지 시간 (ms) */
-const WRITING_STEP_MS = 550;
-
-/**
- * 연필 아이콘의 left 위치 (px, 160×160 컨테이너 기준)
- * Figma 좌표 그대로 사용
- */
-const PENCIL_LEFT_PX: Record<WritingStep, number> = {
-  pen: 50,
-  dot1: 48,
-  dot2: 45.5,
-  dot3: 43,
-};
-
-/** 각 점(8px)의 left 위치 (px, 160×160 컨테이너 기준) */
-const DOT_LEFT_PX = [78, 91, 104] as const;
-/** 점의 top 위치 (px) */
-const DOT_TOP_PX = 98;
-/** 연필의 top 위치 (px) */
-const PENCIL_TOP_PX = 48;
-
-// =============================================================
 // 서브 컴포넌트
 // =============================================================
+
+/** 교정 항목 없음 화면 */
+const PanelNoCorrectionBody = ({ onConfirm }: { onConfirm?: () => void }) => (
+  <div className="flex flex-col items-center justify-between h-full px-4 pt-8 pb-6">
+    <div className="flex flex-col items-center gap-4 flex-1 justify-center">
+      <NoCorrectionIcon size={160} />
+      <div className="flex flex-col items-center gap-2 text-center">
+        <p className="text-xl-plus font-semibold leading-height-xl tracking-tight text-text-primary">
+          더 고칠 부분이 없어요
+        </p>
+        <p className="text-base font-normal leading-6 text-text-secondary whitespace-pre-line">
+          {
+            '지금 메일은 그대로 보내도 좋아요.\n작성창에서 마지막으로 확인해 주세요.'
+          }
+        </p>
+      </div>
+    </div>
+    <button
+      type="button"
+      onClick={onConfirm}
+      className="w-full h-12 rounded-xl bg-background-brand text-text-inverse font-semibold text-base"
+    >
+      확인
+    </button>
+  </div>
+);
 
 /** 이메일 생성 중 로딩 본문 */
 const PanelLoadingBody = ({
@@ -327,7 +365,6 @@ const PanelLoadingBody = ({
   message?: string;
 }) => {
   const [elapsed, setElapsed] = useState(0);
-  const [stepIdx, setStepIdx] = useState(0);
 
   // 경과 시간 — 로딩 메시지 전환용
   useEffect(() => {
@@ -335,61 +372,17 @@ const PanelLoadingBody = ({
     return () => clearInterval(timer);
   }, []);
 
-  // 쓰기 애니메이션 스텝 순환
-  useEffect(() => {
-    const timer = setInterval(
-      () => setStepIdx((prev) => (prev + 1) % WRITING_STEPS.length),
-      WRITING_STEP_MS
-    );
-    return () => clearInterval(timer);
-  }, []);
-
-  const step = WRITING_STEPS[stepIdx];
-  const pencilLeft = PENCIL_LEFT_PX[step];
-  const isReset = step === 'pen'; // pen으로 돌아올 때 즉시 복귀 (transition 없음)
-
-  // 각 점의 활성 여부: 한 번 켜진 점은 pen으로 돌아갈 때까지 유지
-  const dotActive: [boolean, boolean, boolean] = [
-    step !== 'pen',
-    step === 'dot2' || step === 'dot3',
-    step === 'dot3',
-  ];
-
   return (
-    <div className="flex-1 flex flex-col items-center justify-between  px-4 py-5 h-full">
+    <div className="flex-1 flex flex-col items-center justify-between px-4 py-5 h-full">
       <div className="flex-1 flex flex-col items-center justify-center">
-        {/* 스피너 */}
-        <div className="relative size-40 shrink-0">
-          {/* AI 연필 쓰기 애니메이션 (Figma node 3188-2121) */}
-          <div className="absolute inset-0 z-10">
-            {/* 연필 아이콘 — 점이 추가될수록 좌측 이동 */}
-            <div
-              className="absolute size-16 overflow-hidden"
-              style={{
-                top: PENCIL_TOP_PX,
-                left: pencilLeft,
-                transition: isReset ? 'none' : 'left 0.25s ease-out',
-              }}
-            >
-              <img src={iconAiPencil} alt="" className="size-full" />
-            </div>
-
-            {/* 점 3개 — 순서대로 나타남 */}
-            {DOT_LEFT_PX.map((leftPos, i) => (
-              <div
-                key={i}
-                className={`absolute size-2 rounded-full transition-colors duration-300 ${
-                  dotActive[i] ? 'bg-background-brand-100' : ''
-                }`}
-                style={{ top: DOT_TOP_PX, left: leftPos }}
-              />
-            ))}
-          </div>
+        {/* AI 연필 쓰기 애니메이션 */}
+        <div className="shrink-0">
+          <AIPencilWritingIcon size={160} />
         </div>
 
         {/* 텍스트 */}
         <div className="flex flex-col gap-2 items-center text-center w-80">
-          <h6 className="text-xl font-medium leading-7 tracking-tight text-text-primary">
+          <h6 className="text-xl font-medium leading-7 tracking-tight text-text-primary whitespace-pre-line">
             {message ?? getLoadingMessage(elapsed, receiverLabel, purposeLabel)}
           </h6>
           {!message && (
@@ -412,7 +405,180 @@ const PanelLoadingBody = ({
   );
 };
 
-/** 회신 분석 로딩 화면 */
+// ── 회신 동의 화면 전용 아이콘 ────────────────────────────────────
+const ConsentCheckIcon = ({ checked }: { checked: boolean }) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={checked ? 'text-text-brand' : 'text-text-placeholder'}
+  >
+    <path
+      d="M2.5 8.5L5.5 11.5L13.5 4.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const ConsentChevronIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className="text-text-tertiary"
+  >
+    <path
+      d="M6 4L10 8L6 12"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const ConsentWhiteCheckIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 20 20"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M3.5 10.5L7.5 14.5L16.5 5.5"
+      stroke="white"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const REPLY_CONSENT_TERMS = [
+  {
+    key: 'privacy',
+    label: '(필수) 개인정보 수집·이용 동의',
+    url: 'https://tonefit.kr/privacy',
+  },
+  {
+    key: 'overseas',
+    label: '(필수) 개인정보 국외이전 동의',
+    url: 'https://tonefit.kr/overseas-transfer',
+  },
+] as const;
+
+/** 회신 MAIL_READ 약관 동의 화면 */
+const PanelReplyConsentBody = ({
+  onAgree,
+}: {
+  onAgree: () => void;
+  onCancel?: () => void;
+}) => {
+  const [checked, setChecked] = useState({ privacy: false, overseas: false });
+  const [isLoading, setIsLoading] = useState(false);
+
+  const allChecked = checked.privacy && checked.overseas;
+
+  const handleToggleAll = () => {
+    const next = !allChecked;
+    setChecked({ privacy: next, overseas: next });
+  };
+
+  const handleToggle = (key: 'privacy' | 'overseas') => {
+    setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleStart = async () => {
+    if (!allChecked) return;
+    setIsLoading(true);
+    try {
+      await onAgree();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full px-4 py-2.5 items-center justify-center gap-16">
+      {/* 헤드라인 */}
+      <h1 className="text-2xl font-bold leading-8 tracking-tight text-text-primary text-center">
+        회신 기능 사용을 위해
+        <br />
+        추가 동의가 필요해요
+      </h1>
+
+      {/* 약관 동의 영역 */}
+      <div className="flex flex-col gap-6 w-full">
+        {/* 전체 동의 버튼 */}
+        <button
+          type="button"
+          onClick={handleToggleAll}
+          className="flex items-center justify-center gap-4 h-12 px-6 w-full bg-background-brand rounded-lg hover:opacity-90 active:opacity-80 transition-opacity cursor-pointer"
+        >
+          <ConsentWhiteCheckIcon />
+          <span className="flex-1 text-center text-lg font-semibold leading-6.5 tracking-tight text-text-inverse">
+            약관 전체 동의
+          </span>
+          <span className="size-5 shrink-0" />
+        </button>
+
+        {/* 개별 약관 목록 */}
+        <div className="flex flex-col w-full">
+          {REPLY_CONSENT_TERMS.map((term) => (
+            <div
+              key={term.key}
+              className="flex items-center gap-2.5 h-11.5 px-5 py-2.5 bg-background-surface"
+            >
+              <button
+                type="button"
+                onClick={() => handleToggle(term.key)}
+                className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer"
+                aria-pressed={checked[term.key]}
+              >
+                <ConsentCheckIcon checked={checked[term.key]} />
+                <span
+                  className={`text-sm font-semibold leading-5 tracking-tight whitespace-nowrap ${
+                    checked[term.key]
+                      ? 'text-text-secondary'
+                      : 'text-text-placeholder'
+                  }`}
+                >
+                  {term.label}
+                </span>
+              </button>
+              <a
+                href={term.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0"
+                aria-label={`${term.label} 상세 보기`}
+              >
+                <ConsentChevronIcon />
+              </a>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div className="w-full">
+        <ButtonLongV2 disabled={!allChecked || isLoading} onClick={handleStart}>
+          {isLoading ? '처리 중...' : '시작하기'}
+        </ButtonLongV2>
+      </div>
+    </div>
+  );
+};
+
+/** 회신 분석 로딩 화면 (call) */
 const PanelReplyAnalysisLoadingBody = ({
   onCancel,
 }: {
@@ -422,9 +588,9 @@ const PanelReplyAnalysisLoadingBody = ({
     <div className="flex-1 flex flex-col items-center justify-center gap-5">
       <MailReadingIcon size={60} />
       <p className="text-xl font-semibold leading-7 tracking-tight text-text-primary text-center">
-        회신에 필요한 내용을
+        받은 메일을 읽고,
         <br />
-        정리하고 있어요.
+        답할 질문을 추리고 있어요.
       </p>
     </div>
     {onCancel && (
@@ -435,20 +601,99 @@ const PanelReplyAnalysisLoadingBody = ({
   </div>
 );
 
-/** 회신 질문 답변 입력 폼 */
+/** 회신 작성 로딩 화면 (load) — 10초 후 점검 메시지로 전환 */
+const PanelReplyWriteLoadingBody = ({
+  onCancel,
+}: {
+  onCancel?: () => void;
+}) => {
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setChecking(true), 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (checking) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-between px-4 py-5 h-full">
+        <div className="flex-1 flex flex-col items-center justify-center gap-5">
+          <MailReadingIcon size={60} />
+          <p className="text-xl font-semibold leading-7 tracking-tight text-text-primary text-center">
+            이상이 없는지
+            <br />
+            꼼꼼히 살펴볼게요.
+          </p>
+        </div>
+        {onCancel && (
+          <div className="w-full shrink-0">
+            <ButtonLongV2 onClick={onCancel}>중단하기</ButtonLongV2>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <PanelLoadingBody
+      receiverLabel=""
+      purposeLabel=""
+      message={'답해주신 내용으로\n회신을 작성하고 있어요'}
+      onCancel={onCancel}
+    />
+  );
+};
+
+/** 회신 완료 화면 (done) */
+const PanelReplySuccessBody = ({
+  onCorrect,
+  onReset,
+}: {
+  onCorrect: () => void;
+  onReset: () => void;
+}) => (
+  <div className="flex-1 flex flex-col items-center justify-between px-4 py-5 h-full">
+    <div className="flex-1 flex flex-col items-center justify-center gap-5">
+      <MailPackingIcon size={88} />
+      <div className="flex flex-col gap-2 items-center text-center">
+        <p className="text-xl font-semibold leading-7 tracking-tight text-text-primary">
+          작성창에 회신 초안을 넣어뒀어요
+        </p>
+        <p className="text-sm font-normal leading-5.5 tracking-tight text-text-secondary text-center">
+          초안은 자동으로 전송되지않아요
+          <br />
+          보내기 전에 한 번 더 다듬을 수 있어요
+        </p>
+      </div>
+    </div>
+    <div className="!hidden w-full shrink-0 flex flex-col gap-2.5">
+      <ButtonLongV2 onClick={onCorrect}>이 회신 교정하기</ButtonLongV2>
+      <ButtonLongV2 variant="secondary" onClick={onReset}>
+        새 회신 시작하기
+      </ButtonLongV2>
+    </div>
+  </div>
+);
+
+/** 회신 질문 답변 입력 폼 (input) */
 const PanelReplyInputBody = ({
   analysis,
+  summaries,
+  originalSubject,
   onSubmit,
 }: {
   analysis: import('@/types').ReplyAnalysisResponse;
+  summaries: import('@/types').ReplySummaryItem[];
+  originalSubject?: string;
   onSubmit: (data: import('@/types').ReplyRequest) => void;
 }) => {
   const [receiver, setReceiver] = useState<ReceiverType | null>(
-    analysis.receiver_type_suggestion ?? null
+    analysis.recipient?.type ?? null
   );
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [freeInput, setFreeInput] = useState('');
-  const [conversationOpen, setConversationOpen] = useState(true);
+  const [extraMessage, setExtraMessage] = useState('');
+  const [summaryOpen, setSummaryOpen] = useState(true);
 
   const answeredCount = Object.values(answers).filter((v) => v.trim()).length;
   const hasQuestions = analysis.questions.length > 0;
@@ -466,56 +711,94 @@ const PanelReplyInputBody = ({
     onSubmit({
       conversation: analysis.conversation,
       receiver_type: receiver,
+      original_subject: originalSubject || undefined,
       questions: analysis.questions.length > 0 ? analysis.questions : undefined,
       answers: answerItems.length > 0 ? answerItems : undefined,
       free_input: freeInput.trim() || undefined,
+      extra_message: extraMessage.trim() || undefined,
     });
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden">
+    <div className="bg-background-page flex-1 flex flex-col h-full overflow-hidden">
       <div className="flex-1 overflow-y-auto px-4 py-5 flex flex-col gap-6">
         {/* 헤더 */}
-        <div className="flex flex-col gap-2.5 px-2.5">
+        <div className="px-2.5">
           <h2 className="text-2xl font-bold leading-8 tracking-tight text-text-primary">
-            메일 내용을 바탕으로
+            받은 메일을 읽고,
             <br />
-            답변할 질문을 정리했어요.
+            답장에 필요한 질문을 추렸어요
           </h2>
-          <p className="text-sm font-normal leading-5.5 tracking-tight text-text-secondary">
-            대화 맥락을 확인하고 필요한 정보들을 채워주세요.
-          </p>
         </div>
 
-        {/* 대화 요약 카드 */}
+        {/* 메일 요약 카드 */}
         <div className="bg-background-surface rounded-2xl p-3.5 shadow-[0px_1px_4px_rgba(124,77,255,0.1)]">
-          <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center justify-between">
             <span className="text-base font-semibold leading-6 tracking-tight text-text-primary">
-              정리된 대화
+              메일 요약
             </span>
             <button
               type="button"
-              onClick={() => setConversationOpen((o) => !o)}
-              className="text-sm font-semibold leading-5 tracking-tight text-text-brand cursor-pointer"
+              onClick={() => setSummaryOpen((o) => !o)}
+              className="text-text-tertiary cursor-pointer"
+              aria-label={summaryOpen ? '접기' : '펼치기'}
             >
-              {conversationOpen ? '접기' : '펼치기'}
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className={`transition-transform duration-200 ${summaryOpen ? 'rotate-90' : ''}`}
+              >
+                <path
+                  d="M13.8297 10.8192C14.3984 10.4211 14.3984 9.57887 13.8297 9.18077L6.57346 4.10142C5.91069 3.63748 5 4.11163 5 4.92066L5 15.0793C5 15.8884 5.91069 16.3625 6.57346 15.8986L13.8297 10.8192Z"
+                  fill="#D2D6E1"
+                />
+              </svg>
             </button>
           </div>
-          {conversationOpen && (
+          {summaryOpen && summaries.length > 0 && (
             <>
-              <p className="text-xs font-normal leading-4.5 tracking-tight text-text-secondary mb-2.5">
-                {analysis.conversation}
-              </p>
               <div className="border-t border-border-subtle w-full my-2.5" />
+              <div className="flex flex-col gap-1.5">
+                {summaries.map((item) => (
+                  <div
+                    key={item.order}
+                    className="flex items-start gap-1 px-1.5 py-1 rounded-sm"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 13 13"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="mt-0.5"
+                    >
+                      <path
+                        d="M7.29338 2.22711C7.05537 2.07868 6.7805 2 6.5 2C6.18699 1.99981 5.88177 2.09759 5.62714 2.27963C5.3725 2.46166 5.18122 2.71882 5.08012 3.01505L4.55535 4.55488L3.01703 5.07965L2.84011 5.15162C2.57346 5.28215 2.35157 5.4889 2.20256 5.74568C2.05354 6.00245 1.98411 6.29768 2.00306 6.59395C2.02201 6.89023 2.12848 7.17421 2.309 7.4099C2.48951 7.6456 2.73593 7.8224 3.01703 7.9179L4.55685 8.44267L5.08162 9.981L5.15359 10.1564C5.28399 10.4231 5.49062 10.6451 5.7473 10.7942C6.00398 10.9433 6.29916 11.0129 6.59542 10.9941C6.89168 10.9753 7.1757 10.869 7.41149 10.6887C7.64727 10.5083 7.82421 10.262 7.91988 9.981L8.44465 8.44117L9.98297 7.9164L10.1599 7.84444C10.4265 7.7139 10.6484 7.50715 10.7974 7.25038C10.9465 6.99361 11.0159 6.69837 10.9969 6.4021C10.978 6.10583 10.8715 5.82185 10.691 5.58615C10.5105 5.35045 10.2641 5.17365 9.98297 5.07815L8.44315 4.55338L7.91838 3.01505L7.84641 2.83963C7.72299 2.58775 7.53139 2.37553 7.29338 2.22711Z"
+                        fill="#7C4DFF"
+                      />
+                    </svg>
+
+                    <p className="text-xs font-normal leading-4.5 tracking-tight text-text-secondary">
+                      {item.summary}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </>
           )}
         </div>
 
         {/* 수신자 유형 */}
         <div className="flex flex-col gap-2.5">
-          <div className="px-3">
-            <p className="text-base font-semibold leading-6 tracking-tight text-text-primary">
+          <div className="flex items-center gap-2 px-3">
+            <p className="text-base font-semibold leading-6 tracking-tight text-text-primary shrink-0">
               수신자 유형 선택
+            </p>
+            <p className="text-xs font-normal leading-4 tracking-tight text-text-placeholder">
+              *AI가 미리 골라뒀어요
             </p>
           </div>
           <div className="grid grid-cols-2 gap-1">
@@ -523,6 +806,7 @@ const PanelReplyInputBody = ({
               <ChipV2
                 key={value}
                 selected={receiver === value}
+                size="md"
                 onClick={() => setReceiver(receiver === value ? null : value)}
               >
                 {label}
@@ -531,15 +815,12 @@ const PanelReplyInputBody = ({
           </div>
         </div>
 
-        {/* 필요한 정보 (질문) */}
+        {/* 회신에 필요한 정보 (질문) */}
         {analysis.questions.length > 0 && (
           <div className="flex flex-col gap-2.5">
-            <div className="flex items-center justify-between px-3">
+            <div className="px-3">
               <p className="text-base font-semibold leading-6 tracking-tight text-text-primary">
-                필요한 정보
-              </p>
-              <p className="text-xs font-normal leading-4 tracking-tight text-text-brand">
-                {Math.min(2, analysis.questions.length)}개만 답하면 작성 가능
+                회신에 필요한 정보
               </p>
             </div>
             <div className="bg-background-surface rounded-2xl p-4 shadow-[0px_1px_4px_rgba(124,77,255,0.1)]">
@@ -550,12 +831,12 @@ const PanelReplyInputBody = ({
                       <div className="border-t border-border-subtle w-full mb-5" />
                     )}
                     <div className="flex flex-col gap-2.5">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-start gap-2">
                         <span className="bg-background-brand text-text-inverse text-xs font-semibold leading-4 tracking-tight px-2.5 py-0.5 rounded-full min-w-[35px] text-center">
                           Q{q.id}
                         </span>
                         <p className="flex-1 text-sm font-semibold leading-5 tracking-tight text-text-primary">
-                          {q.text}
+                          {q.question}
                         </p>
                       </div>
                       <input
@@ -578,19 +859,37 @@ const PanelReplyInputBody = ({
           </div>
         )}
 
-        {/* 그 밖에 전하고 싶은 말 */}
+        {/* 자유 입력 (질문 없을 때) */}
+        {!hasQuestions && (
+          <div className="flex flex-col gap-2.5">
+            <div className="px-3">
+              <p className="text-base font-semibold leading-6 tracking-tight text-text-primary">
+                회신에 필요한 정보
+              </p>
+            </div>
+            <textarea
+              value={freeInput}
+              onChange={(e) => setFreeInput(e.target.value)}
+              placeholder="전하려는 내용을 입력해주세요"
+              rows={4}
+              className="w-full bg-background-surface border border-border-default rounded-2xl px-4 py-3 text-sm font-normal leading-5.5 tracking-tight text-text-primary placeholder:text-text-placeholder outline-none focus:border-border-focus resize-none"
+            />
+          </div>
+        )}
+
+        {/* 추가로 전할 말 (선택) */}
         <div className="flex flex-col gap-2.5">
           <div className="px-3">
             <p className="text-base font-semibold leading-6 tracking-tight text-text-primary">
-              그 밖에 전하고 싶은 말
+              추가로 전할 말 <span>(선택)</span>
             </p>
           </div>
           <textarea
-            value={freeInput}
-            onChange={(e) => setFreeInput(e.target.value)}
+            value={extraMessage}
+            onChange={(e) => setExtraMessage(e.target.value)}
             placeholder="내용을 입력해주세요"
             rows={4}
-            className="w-full bg-background-surface border border-border-default rounded-2xl px-4 py-3 text-sm font-normal leading-5.5 tracking-tight text-text-primary placeholder:text-text-placeholder outline-none focus:border-border-focus resize-none"
+            className="w-full bg-background-surface border border-border-default rounded-2xl px-4 py-3 text-xs font-normal leading-4.5 tracking-tight text-text-primary placeholder:text-text-placeholder outline-none focus:border-border-focus resize-none"
           />
         </div>
       </div>
@@ -606,35 +905,6 @@ const PanelReplyInputBody = ({
 };
 
 /** 회신 완료 화면 */
-const PanelReplySuccessBody = ({
-  onCorrect,
-  onReset,
-}: {
-  onCorrect: () => void;
-  onReset: () => void;
-}) => (
-  <div className="flex-1 flex flex-col items-center justify-between px-4 py-5 h-full">
-    <div className="flex-1 flex flex-col items-center justify-center gap-5">
-      <MailPackingIcon size={88} />
-      <div className="flex flex-col gap-2 items-center text-center">
-        <p className="text-xl font-semibold leading-7 tracking-tight text-text-primary">
-          회신 초안을 넣어뒀어요
-        </p>
-        <p className="text-sm font-normal leading-5.5 tracking-tight text-text-secondary text-center">
-          작성된 이메일은 자동 전송되지 않아요.
-          <br />
-          메일을 보내기 전에 한 번 더 다듬어 보낼 수 있습니다.
-        </p>
-      </div>
-    </div>
-    <div className="w-full shrink-0 flex flex-col gap-2.5">
-      <ButtonLongV2 onClick={onCorrect}>이 회신 교정하기</ButtonLongV2>
-      <ButtonLongV2 variant="secondary" onClick={onReset}>
-        새 회신 시작하기
-      </ButtonLongV2>
-    </div>
-  </div>
-);
 
 /** 교정 완료 요약 화면 */
 const PanelCorrectionSuccessBody = ({
@@ -957,7 +1227,58 @@ const PanelSuccessBody = ({
 // 에러 variant 타입
 // =============================================================
 
-export type ErrorVariant = 'generic' | 'session_expired' | 'rate_limited';
+export type ReplyErrorVariant =
+  | 'reply_empty'
+  | 'reply_no_quote'
+  | 'reply_too_long'
+  | 'reply_non_korean'
+  | 'reply_api_error'
+  | 'reply_extract_error';
+
+export type ErrorVariant =
+  | 'generic'
+  | 'session_expired'
+  | 'rate_limited'
+  | ReplyErrorVariant;
+
+const REPLY_ERROR_VARIANTS = new Set<string>([
+  'reply_empty',
+  'reply_no_quote',
+  'reply_too_long',
+  'reply_non_korean',
+  'reply_api_error',
+  'reply_extract_error',
+]);
+
+const REPLY_ERROR_CONFIG: Record<
+  ReplyErrorVariant,
+  { title: string; desc: string }
+> = {
+  reply_empty: {
+    title: '메일 내용을 읽지 못했어요.',
+    desc: '대화를 펼친 뒤 다시 시도해 주세요.',
+  },
+  reply_no_quote: {
+    title: '답장할 대화가 보이지 않아요.',
+    desc: '받은 메일을 연 상태에서 다시 시도해 주세요.',
+  },
+  reply_too_long: {
+    title: '대화가 길어 정리하기 어려워요.',
+    desc: '필요한 내용만 남기고 다시 시도해 주세요.',
+  },
+  reply_non_korean: {
+    title: '한국어 메일만 도와드릴 수 있어요.',
+    desc: '한국어 메일을 연 상태에서 다시 시도해 주세요.',
+  },
+  reply_api_error: {
+    title: '요청이 많아 잠시 쉬어갈게요.',
+    desc: '잠시 후 다시 시도해 주세요.',
+  },
+  reply_extract_error: {
+    title: '메일 내용을 읽지 못했어요.',
+    desc: '대화를 펼친 뒤 다시 시도해 주세요.',
+  },
+};
 
 /** 에러 variant별 텍스트 설정 — 모드(generate/correct)별 분기 */
 type ErrorConfigEntry = {
@@ -967,19 +1288,19 @@ type ErrorConfigEntry = {
   descLine3?: string;
 };
 const ERROR_CONFIG: Record<
-  ErrorVariant,
+  Exclude<ErrorVariant, ReplyErrorVariant>,
   Record<PanelMode, ErrorConfigEntry>
 > = {
   generic: {
     generate: {
       title: '초안 생성을 완료하지 못했어요',
-      descLine1: '입력한 내용은 그대로 있어요.',
-      descLine2: '잠시 후 다시 시도해 주세요.',
+      descLine1: '잠시 후 다시 시도해 주세요.',
+      descLine2: '',
     },
     correct: {
       title: '교정을 완료하지 못했어요',
       descLine1: '처리 중에 일시적인 문제가 생겼어요.',
-      descLine2: '잠시 후 다시 시도해 주세요.',
+      descLine2: '',
     },
     reply: {
       title: '회신 작성을 완료하지 못했어요',
@@ -989,32 +1310,32 @@ const ERROR_CONFIG: Record<
   },
   session_expired: {
     generate: {
-      title: '다시 로그인이 필요해요',
-      descLine1: '로그인이 만료되었어요.',
-      descLine2: '로그인 후 이어서 초안을 생성할 수 있습니다.',
+      title: '로그인이 만료되었어요.',
+      descLine1: '다시 로그인하면 이어서 생성할 수 있어요.',
+      descLine2: '',
     },
     correct: {
-      title: '다시 로그인이 필요해요',
-      descLine1: '로그인이 만료되었어요.',
-      descLine2: '로그인 후 이어서 교정할 수 있습니다.',
+      title: '로그인이 만료되었어요.',
+      descLine1: '다시 로그인하면 이어서 교정할 수 있어요.',
+      descLine2: '',
     },
     reply: {
-      title: '다시 로그인이 필요해요',
-      descLine1: '로그인이 만료되었어요.',
-      descLine2: '로그인 후 이어서 회신할 수 있습니다.',
+      title: '로그인이 만료되었어요.',
+      descLine1: '다시 로그인해 주세요.',
+      descLine2: '',
     },
   },
   rate_limited: {
     generate: {
-      title: '요청이 잠시 제한되었어요',
-      descLine1: '짧은 시간에 요청이 몰려 잠시 멈췄어요.',
-      descLine2: '입력한 내용은 그대로 있고,',
-      descLine3: '시간이 지나면 다시 시도할 수 있어요.',
+      title: '잠시만 기다려 주세요',
+      descLine1: '짧은 시간에 생성 요청이 많았어요.',
+      descLine2: '1분 후 다시 시도해 주세요.',
+      descLine3: '',
     },
     correct: {
-      title: '한도가 초과되었어요',
-      descLine1: '잠시 후 재시도 해주세요.',
-      descLine2: '',
+      title: '잠시만 기다려 주세요',
+      descLine1: '짧은 시간에 교정 요청이 많았어요.',
+      descLine2: '1분 후 다시 시도해 주세요.',
     },
     reply: {
       title: '한도가 초과되었어요',
@@ -1055,8 +1376,37 @@ const PanelErrorBody = ({
     return () => clearInterval(timer);
   }, [variant]);
 
+  const isReplyVariant = REPLY_ERROR_VARIANTS.has(variant);
+
+  // 회신 전용 에러
+  if (isReplyVariant) {
+    const { title, desc } = REPLY_ERROR_CONFIG[variant as ReplyErrorVariant];
+    return (
+      <div className="flex-1 flex flex-col items-center justify-between px-4 py-5 h-full">
+        <div className="flex-1 flex flex-col items-center justify-center gap-10 py-12">
+          <div className="shrink-0">
+            <ErrorNoticeIcon size={120} />
+          </div>
+          <div className="flex flex-col gap-3.5 items-center text-center w-full">
+            <p className="text-2xl font-semibold leading-7.5 tracking-tight text-text-primary">
+              {title}
+            </p>
+            <p className="text-base font-normal leading-6 tracking-tight text-text-tertiary text-center whitespace-pre-line">
+              {desc}
+            </p>
+          </div>
+        </div>
+        <div className="w-full shrink-0">
+          <ButtonLongV2 onClick={onRetry}>다시 시도</ButtonLongV2>
+        </div>
+      </div>
+    );
+  }
+
   const { title, descLine1, descLine2, descLine3 } =
-    ERROR_CONFIG[variant][panelMode];
+    ERROR_CONFIG[variant as Exclude<ErrorVariant, ReplyErrorVariant>][
+      panelMode
+    ];
 
   // CTA 버튼 설정
   const isCounting = variant === 'rate_limited' && countdown > 0;
@@ -1074,8 +1424,12 @@ const PanelErrorBody = ({
   return (
     <div className="flex-1 flex flex-col items-center justify-between px-4 py-5 h-full">
       <div className="flex-1 flex flex-col items-center justify-center gap-10 py-12">
-        <div className="size-22.5 rounded-full bg-background-brand-subtle flex items-center justify-center shrink-0">
-          <img src={iconExclamation} alt="" className="w-3.25 h-12.5" />
+        <div className="shrink-0">
+          {variant === 'session_expired' ? (
+            <LoginExpiredIcon size={120} />
+          ) : (
+            <ErrorNoticeIcon size={120} />
+          )}
         </div>
         <div className="flex flex-col gap-3.5 items-center text-center w-full">
           <p className="text-2xl font-semibold leading-7.5 tracking-tight text-text-primary">
@@ -1331,7 +1685,7 @@ const CorrectionCard = ({
       {/* 헤더: 번호 + 라벨 */}
       <div className="flex items-center w-full">
         <div className="flex flex-1 gap-1 items-center min-w-0">
-          <div className="bg-background-brand flex flex-col items-center justify-center px-2.5 py-0.5 rounded-full shrink-0">
+          <div className="bg-background-brand flex flex-col items-center justify-center px-2.5 py-0.5 rounded-full shrink-0 w-9">
             <span className="text-xs font-semibold leading-4 text-text-inverse w-full text-center">
               {String(index + 1).padStart(2, '0')}
             </span>
@@ -1731,7 +2085,15 @@ const PanelBody = ({
                 </span>
               </div>
               <div className="flex flex-col gap-1 flex-1">
-                <div className="relative bg-background-surface border border-border-default rounded-xl p-2.5 flex-1 min-h-[218px]">
+                <div
+                  className={`relative bg-background-surface border rounded-xl p-2.5 flex-1 min-h-[218px] ${
+                    emailText.length > EMAIL_MAX
+                      ? 'border-border-danger'
+                      : emailText.length >= 10
+                        ? 'border-border-brand'
+                        : 'border-border-default'
+                  }`}
+                >
                   <textarea
                     ref={textareaRef}
                     data-panel-input="email-brief"
@@ -1761,7 +2123,9 @@ const PanelBody = ({
                     className={`text-xs font-normal leading-4.5 tracking-tight ${
                       emailText.length > EMAIL_MAX
                         ? 'text-text-danger'
-                        : 'text-text-placeholder'
+                        : emailText.length >= 10
+                          ? 'text-text-brand'
+                          : 'text-text-placeholder'
                     }`}
                   >
                     {emailText.length} / {EMAIL_MAX}자
@@ -1774,7 +2138,10 @@ const PanelBody = ({
       </div>
 
       {/* CTA 버튼 */}
-      <div className="shrink-0 flex flex-col gap-4 p-2">
+      <div className="shrink-0 flex flex-col gap-2 p-2">
+        <ButtonLongV2 disabled={!canGenerate} onClick={onGenerate}>
+          {panelMode === 'correct' ? '교정 시작하기' : '초안 생성하기'}
+        </ButtonLongV2>
         {panelMode === 'generate' && (
           <p className="flex gap-1 items-center justify-center text-text-placeholder text-xs leading-4.5 tracking-tight">
             <span>
@@ -1813,9 +2180,6 @@ const PanelBody = ({
             </span>
           </p>
         )}
-        <ButtonLongV2 disabled={!canGenerate} onClick={onGenerate}>
-          {panelMode === 'correct' ? '교정 시작하기' : '초안 생성하기'}
-        </ButtonLongV2>
       </div>
     </div>
   );
@@ -1875,9 +2239,15 @@ const ToneFitPanel = ({
   replyMails,
   replyTo,
   replyCc,
+  replySubject,
+  replyTriggerKey,
+  replyError,
+  onAgreeMailRead,
   onReplyAnalysisRequest,
+  onReplyAnalysisCancel,
   onReplyWriteRequest,
   onReplySuccess,
+  onNoCorrectionConfirm,
 }: ToneFitPanelProps) => {
   const CORRECTION_HINT_KEY = 'tonefit_correction_hint_dismissed';
   const [panelMode, setPanelMode] = useState<PanelMode>(
@@ -1911,7 +2281,12 @@ const ToneFitPanel = ({
   const [replyAnalysis, setReplyAnalysis] = useState<
     import('@/types').ReplyAnalysisResponse | null
   >(null);
+  const [replySummaries, setReplySummaries] = useState<
+    import('@/types').ReplySummaryItem[]
+  >([]);
   const replyStartedRef = useRef(false);
+  const [internalErrorVariant, setInternalErrorVariant] =
+    useState<ErrorVariant | null>(null);
 
   /** 모드 전환 — 교정 모드 최초 진입 시에만 안내 배너 표시 */
 
@@ -1992,7 +2367,9 @@ const ToneFitPanel = ({
       if (cancelledRef.current) return;
       if (result.type === 'correction') {
         setCorrectionSession(result);
-        setView('correction-review');
+        setView(
+          result.changes.length === 0 ? 'no-correction' : 'correction-review'
+        );
       } else {
         setView('success');
         onSuccess(result.subject, result.content);
@@ -2084,8 +2461,9 @@ const ToneFitPanel = ({
     if (panelMode === 'reply' && replyMails && onReplyAnalysisRequest) {
       setView('reply-loading-analysis');
       onReplyAnalysisRequest(replyMails, replyTo, replyCc)
-        .then((result) => {
-          setReplyAnalysis(result);
+        .then(({ analysis, summaries }) => {
+          setReplyAnalysis(analysis);
+          setReplySummaries(summaries);
           setView('reply-input');
         })
         .catch(() => setView('error'));
@@ -2094,29 +2472,74 @@ const ToneFitPanel = ({
     }
   };
 
-  // reply 모드: 패널 열릴 때 자동으로 분석 시작
+  const REPLY_ERROR_CODE_MAP: Record<string, ReplyErrorVariant> = {
+    REPLY_EMPTY: 'reply_empty',
+    REPLY_NO_QUOTE: 'reply_no_quote',
+    REPLY_TOO_LONG: 'reply_too_long',
+    REPLY_NON_KOREAN: 'reply_non_korean',
+    REPLY_API_ERROR: 'reply_api_error',
+    REPLY_EXTRACT_ERROR: 'reply_extract_error',
+  };
+
+  // reply 모드: 패널 열릴 때 자동으로 분석 시작 / 패널 열린 상태에서 재요청 시 재시작
   useEffect(() => {
-    if (
-      initialPanelMode === 'reply' &&
-      replyMails &&
-      onReplyAnalysisRequest &&
-      !replyStartedRef.current
-    ) {
+    const isInitialReply =
+      initialPanelMode === 'reply' && !replyStartedRef.current;
+    const isRetrigger = replyTriggerKey !== undefined && replyTriggerKey > 0;
+
+    if (!isInitialReply && !isRetrigger) return;
+
+    // content script에서 사전 검증 에러가 있으면 API 호출 없이 에러 화면으로
+    if (replyError) {
+      replyStartedRef.current = true;
+      const variant: ErrorVariant =
+        REPLY_ERROR_CODE_MAP[replyError] ?? 'generic';
+      startTransition(() => {
+        setPanelMode('reply');
+        setInternalErrorVariant(variant);
+        setView('error');
+      });
+      return;
+    }
+
+    if (replyMails && onReplyAnalysisRequest) {
       replyStartedRef.current = true;
       startTransition(() => {
         setPanelMode('reply');
         setView('reply-loading-analysis');
       });
       onReplyAnalysisRequest(replyMails, replyTo, replyCc)
-        .then((result) => {
-          setReplyAnalysis(result);
+        .then(({ analysis, summaries }) => {
+          if (!analysis) return; // 중단하기로 abort된 경우
+          setReplyAnalysis(analysis);
+          setReplySummaries(summaries);
           setView('reply-input');
         })
-        .catch(() => {
-          setView('error');
+        .catch((err: unknown) => {
+          const typedErr = err as {
+            _termsRequired?: boolean;
+            _replyApiError?: boolean;
+          };
+          if (typedErr._termsRequired) {
+            setView('reply-consent');
+          } else if (typedErr._replyApiError) {
+            setInternalErrorVariant('reply_api_error');
+            setView('error');
+          } else {
+            setView('error');
+          }
         });
     }
-  }, [initialPanelMode, replyMails, onReplyAnalysisRequest, replyTo, replyCc]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    initialPanelMode,
+    replyTriggerKey,
+    replyError,
+    replyMails,
+    onReplyAnalysisRequest,
+    replyTo,
+    replyCc,
+  ]);
 
   /** Mac: Cmd+Enter / Windows: Alt+Enter 로 생성 */
   useEffect(() => {
@@ -2181,12 +2604,15 @@ const ToneFitPanel = ({
         ))}
       {activeView === 'error' && (
         <PanelErrorBody
-          key={`${errorVariant}-${activePanelMode}`}
-          variant={errorVariant}
+          key={`${internalErrorVariant ?? errorVariant}-${activePanelMode}`}
+          variant={internalErrorVariant ?? errorVariant}
           panelMode={activePanelMode}
           onRetry={handleRetry}
           onGoToLogin={onGoToLogin}
         />
+      )}
+      {activeView === 'no-correction' && (
+        <PanelNoCorrectionBody onConfirm={onNoCorrectionConfirm} />
       )}
       {activeView === 'correction-review' && (
         <PanelCorrectionReviewBody
@@ -2197,29 +2623,52 @@ const ToneFitPanel = ({
           onComplete={handleCorrectionComplete}
         />
       )}
-      {activeView === 'reply-loading-analysis' && (
-        <PanelReplyAnalysisLoadingBody
-          onCancel={
-            onCancel
-              ? () => {
-                  onCancel();
-                  setView('input');
-                }
-              : undefined
-          }
+      {activeView === 'reply-consent' && (
+        <PanelReplyConsentBody
+          onAgree={async () => {
+            if (onAgreeMailRead) await onAgreeMailRead();
+            if (replyMails && onReplyAnalysisRequest) {
+              setView('reply-loading-analysis');
+              onReplyAnalysisRequest(replyMails, replyTo, replyCc)
+                .then(({ analysis, summaries }) => {
+                  setReplyAnalysis(analysis);
+                  setReplySummaries(summaries);
+                  setView('reply-input');
+                })
+                .catch(() => setView('error'));
+            }
+          }}
+          onCancel={() => {
+            setPanelMode('generate');
+            setView('input');
+          }}
         />
       )}
-      {activeView === 'reply-input' && replyAnalysis && (
+      {activeView === 'reply-loading-analysis' && (
+        <PanelReplyAnalysisLoadingBody onCancel={onReplyAnalysisCancel} />
+      )}
+      {activeView === 'reply-input' && (
         <PanelReplyInputBody
-          analysis={replyAnalysis}
+          analysis={replyAnalysis ?? DEV_MOCK_REPLY_ANALYSIS}
+          originalSubject={replySubject}
+          summaries={
+            replySummaries.length > 0
+              ? replySummaries
+              : DEV_MOCK_REPLY_SUMMARIES
+          }
           onSubmit={handleReplyWrite}
         />
       )}
       {activeView === 'reply-loading-write' && (
-        <PanelLoadingBody
-          receiverLabel=""
-          purposeLabel=""
-          message="답장 메일을 작성 중이예요."
+        <PanelReplyWriteLoadingBody
+          onCancel={
+            onCancel
+              ? () => {
+                  onCancel();
+                  setView('reply-input');
+                }
+              : undefined
+          }
         />
       )}
       {activeView === 'reply-success' && (
@@ -2231,6 +2680,7 @@ const ToneFitPanel = ({
           onReset={() => {
             replyStartedRef.current = false;
             setReplyAnalysis(null);
+            setReplySummaries([]);
             setPanelMode('generate');
             setView('input');
           }}
@@ -2238,7 +2688,7 @@ const ToneFitPanel = ({
       )}
       {activeView === 'input' && (
         <PanelBody
-          panelMode={panelMode}
+          panelMode={activePanelMode}
           receiver={receiver}
           setReceiver={setReceiver}
           purpose={purpose}

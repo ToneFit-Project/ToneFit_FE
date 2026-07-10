@@ -52,6 +52,7 @@ const INITIAL_TERMS: TermsState = {
   ANALYTICS: false,
   MARKETING: false,
   AI_LEARNING: false,
+  MAIL_READ: false,
 };
 
 // ── 내부 서브 컴포넌트 ────────────────────────────────────────────

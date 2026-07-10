@@ -7,7 +7,6 @@
 
 interface StartViewProps {
   onGoogleLogin: () => void;
-  onSkip?: () => void;
   error?: string | null;
 }
 
@@ -38,7 +37,7 @@ const GoogleLogo = () => (
   </svg>
 );
 
-const StartView = ({ onGoogleLogin, onSkip, error }: StartViewProps) => {
+const StartView = ({ onGoogleLogin, error }: StartViewProps) => {
   return (
     <div className="bg-background-surface flex flex-col h-full px-4 py-2.5 items-center justify-center gap-16">
       {/* 헤드라인 + 설명 */}
@@ -69,17 +68,6 @@ const StartView = ({ onGoogleLogin, onSkip, error }: StartViewProps) => {
           <GoogleLogo />
           Google로 계속하기
         </button>
-
-        {/* TODO: 백엔드 Client ID 허용 후 제거 */}
-        {onSkip && (
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-xs text-text-tertiary underline underline-offset-2 text-center cursor-pointer"
-          >
-            [DEV] 로그인 건너뛰기
-          </button>
-        )}
 
         {/* 약관 링크 */}
         <div className="flex items-center justify-center gap-2.5 px-10 py-2.5 text-xs font-normal leading-4.5 tracking-tight text-text-tertiary underline underline-offset-2">

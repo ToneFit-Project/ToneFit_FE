@@ -74,7 +74,8 @@ export type TermsType =
   | 'PRIVACY'
   | 'ANALYTICS'
   | 'MARKETING'
-  | 'AI_LEARNING';
+  | 'AI_LEARNING'
+  | 'MAIL_READ';
 
 // =============================================================
 // 공통 타입
@@ -413,12 +414,28 @@ export interface ReplyAnalysisRequest {
 
 export interface ReplyQuestion {
   id: number;
-  text: string;
+  question: string;
+  mail_order?: number;
+}
+
+export interface ReplySummaryItem {
+  order: number;
+  sender: string;
+  summary: string;
+}
+
+export interface ReplySummaryResponse {
+  summaries: ReplySummaryItem[];
 }
 
 export interface ReplyAnalysisResponse {
   conversation: string;
-  receiver_type_suggestion: ReceiverType;
+  recipient: {
+    type: ReceiverType;
+    label: string;
+    confidence: 'high' | 'mid' | 'low';
+    reason: string;
+  };
   questions: ReplyQuestion[];
 }
 
@@ -430,9 +447,11 @@ export interface ReplyAnswer {
 export interface ReplyRequest {
   conversation: string;
   receiver_type: ReceiverType;
+  original_subject?: string;
   questions?: ReplyQuestion[];
   answers?: ReplyAnswer[];
   free_input?: string;
+  extra_message?: string;
 }
 
 export interface ReplyResponse {

@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 102 116" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Magnifier">
+<path id="Magnifier / Rim + Handle" d="M50 0C77.6142 0 100 22.3858 100 50C100 63.588 94.5766 75.907 85.7803 84.9189L100.247 103.002C103.007 106.452 102.448 111.487 98.998 114.247C95.548 117.007 90.513 116.448 87.7529 112.998L72.9141 94.4492C66.0494 97.9952 58.2591 100 50 100C22.3858 100 0 77.6142 0 50C0 22.3858 22.3858 0 50 0Z" fill="var(--fill-0, #7C4DFF)"/>
+<circle id="Magnifier / Lens Fill" cx="50" cy="50" r="38" fill="var(--fill-0, #FBFAFF)"/>
+</g>
+</svg>
