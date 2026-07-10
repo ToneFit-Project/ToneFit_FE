@@ -1,4 +1,8 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type {
+  AnchorHTMLAttributes,
+  ButtonHTMLAttributes,
+  ReactNode,
+} from 'react';
 import Icon from '@/components/ui/Icon';
 import type { IconName } from '@/components/ui/Icon';
 
@@ -13,7 +17,10 @@ import type { IconName } from '@/components/ui/Icon';
 export type ButtonLongV2Variant = 'primary' | 'secondary';
 export type ButtonLongV2Layout = 'label-only' | 'icon-label' | 'label-icon';
 
-export interface ButtonLongV2Props extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonLongV2Props
+  extends
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    Pick<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'target' | 'rel'> {
   /**
    * 버튼 변형
    * - primary  : 브랜드 보라 배경 + 흰 텍스트
@@ -61,6 +68,9 @@ const ButtonLongV2 = ({
   disabled,
   children,
   className = '',
+  href,
+  target,
+  rel,
   ...props
 }: ButtonLongV2Props) => {
   const isDisabled = disabled || isLoading;
@@ -79,25 +89,22 @@ const ButtonLongV2 = ({
       'active:bg-background-brand-subtle active:border-background-brand-pressed',
   };
 
-  return (
-    <button
-      type="button"
-      disabled={isDisabled}
-      className={`
-        w-full flex items-center justify-center
-        h-12 px-5 py-3 rounded-lg
-        text-base font-semibold leading-6 tracking-tight
-        transition-colors
-        ${hasIcon ? 'gap-2' : ''}
-        ${
-          isDisabled
-            ? 'bg-action-primary-disabled-background border border-border-disabled text-action-primary-disabled-foreground cursor-not-allowed pointer-events-none'
-            : variantClasses[variant]
-        }
-        ${className}
-      `}
-      {...props}
-    >
+  const sharedClassName = `
+    w-full flex items-center justify-center
+    h-12 px-5 py-3 rounded-lg
+    text-base font-semibold leading-6 tracking-tight
+    transition-colors
+    ${hasIcon ? 'gap-2' : ''}
+    ${
+      isDisabled
+        ? 'bg-action-primary-disabled-background border border-border-disabled text-action-primary-disabled-foreground cursor-not-allowed pointer-events-none'
+        : variantClasses[variant]
+    }
+    ${className}
+  `;
+
+  const content = (
+    <>
       {/* 왼쪽 아이콘 */}
       {(layout === 'icon-label' || isLoading) && (
         <span className="shrink-0">
@@ -114,6 +121,25 @@ const ButtonLongV2 = ({
           <Icon name={icon ?? 'arrow-right'} size={16} color="currentColor" />
         </span>
       )}
+    </>
+  );
+
+  if (href) {
+    return (
+      <a href={href} target={target} rel={rel} className={sharedClassName}>
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={isDisabled}
+      className={sharedClassName}
+      {...props}
+    >
+      {content}
     </button>
   );
 };

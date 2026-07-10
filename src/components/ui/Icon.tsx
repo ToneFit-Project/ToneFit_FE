@@ -34,7 +34,8 @@ export type IconName =
   | 'plus'
   | 'undo'
   | 'redo'
-  | 'check-double';
+  | 'check-double'
+  | 'trailing';
 
 interface IconProps extends SVGAttributes<SVGSVGElement> {
   /** 아이콘 이름 */
@@ -431,13 +432,20 @@ const Icon = ({
     /* arrow-right — 오른쪽 화살표 */
     case 'arrow-right':
       return (
-        <svg {...base} fill="none">
+        <svg {...base} viewBox="0 0 16 16" fill="none">
           <path
-            d="M5 12h14M12 5l7 7-7 7"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            d="M3.33331 8H12.6666"
+            stroke="#7C4DFF"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M8 3.33301L12.6667 7.99967L8 12.6663"
+            stroke="#7C4DFF"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
           />
         </svg>
       );

@@ -9,7 +9,7 @@ import { ROUTES } from '@/constants';
  */
 export default function Footer() {
   return (
-    <footer className="footer w-full bg-background-page--20 border-t border-border-default px-5 py-3.5 text-base font-normal leading-6 tracking-tight text-text-secondary">
+    <footer className="footer w-full bg-background-page border-t border-border-default px-5 py-3.5 text-base font-normal leading-6 tracking-tight text-text-secondary rounded-b-2xl overflow-hidden">
       <div className="footer__inner flex items-center justify-between">
         <p className="footer__copy p-2.5">
           © 2026 ToneFit Inc. All rights reserved.
@@ -27,12 +27,6 @@ export default function Footer() {
           >
             개인정보처리방침
           </Link>
-          <button
-            type="button"
-            className="hover:text-text-primary transition-colors cursor-pointer"
-          >
-            고객센터
-          </button>
         </div>
       </div>
     </footer>

@@ -485,6 +485,484 @@ export function MailReadingIcon({
     </svg>
   );
 }
+interface DraftGenerationIconProps {
+  size?: number;
+  title?: string;
+}
+
+export function DraftGenerationIcon({
+  size = 276,
+  title = '초안 생성',
+}: DraftGenerationIconProps) {
+  return (
+    <svg
+      width={size}
+      height={(size * 222) / 276}
+      viewBox="0 0 276 222"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={title}
+    >
+      <style>{`
+        .draft-white-reveal {
+          transform-box: fill-box;
+          transform-origin: left center;
+          animation: draftReveal 3.6s ease-in-out infinite;
+        }
+        .draft-pen {
+          transform-box: fill-box;
+          transform-origin: center;
+          animation: draftPen 3.6s ease-in-out infinite;
+        }
+        @keyframes draftReveal {
+          0%, 12% { transform: scaleX(0); }
+          58%, 78% { transform: scaleX(1); }
+          86%, 100% { transform: scaleX(0); }
+        }
+        @keyframes draftPen {
+          0%, 12% { transform: translate(-92px, 2px) rotate(-2deg); opacity: 1; }
+          58%, 78% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+          84% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+          85% { transform: translate(-92px, 2px) rotate(-2deg); opacity: 0; }
+          92%, 100% { transform: translate(-92px, 2px) rotate(-2deg); opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .draft-white-reveal, .draft-pen { animation: none; }
+          .draft-white-reveal { transform: scaleX(1); }
+        }
+      `}</style>
+      <defs>
+        <linearGradient
+          id="draft-card-fill"
+          x1="19.2933"
+          y1="0"
+          x2="222.165"
+          y2="208.718"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#E7E0FF" />
+          <stop offset="1" stopColor="#D1C6FF" />
+        </linearGradient>
+        <linearGradient
+          id="draft-pen-fill"
+          x1="253.703"
+          y1="21.0264"
+          x2="219.793"
+          y2="226.821"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#7D4FFF" />
+          <stop offset="1" stopColor="#BFA7FF" />
+        </linearGradient>
+        <clipPath id="draft-white-line-clip">
+          <rect
+            className="draft-white-reveal"
+            x="46.0757"
+            y="136"
+            width="114"
+            height="38"
+          />
+        </clipPath>
+      </defs>
+      <path
+        d="M67.0186 8.37695H154.981C187.368 8.37712 213.623 34.632 213.623 67.0186V154.981C213.623 187.368 187.368 213.623 154.981 213.623H67.0186C34.632 213.623 8.37713 187.368 8.37695 154.981V67.0186C8.37712 34.632 34.632 8.37713 67.0186 8.37695Z"
+        fill="url(#draft-card-fill)"
+      />
+      <path
+        d="M67.0186 8.37695H154.981C187.368 8.37712 213.623 34.632 213.623 67.0186V154.981C213.623 187.368 187.368 213.623 154.981 213.623H67.0186C34.632 213.623 8.37713 187.368 8.37695 154.981V67.0186C8.37712 34.632 34.632 8.37713 67.0186 8.37695Z"
+        stroke="#7C4DFF"
+        strokeWidth="16.7547"
+      />
+      <path
+        d="M46.0757 69.1123C46.0757 63.329 50.764 58.6406 56.5474 58.6406H165.453C171.236 58.6406 175.925 63.329 175.925 69.1123C175.925 74.8957 171.236 79.584 165.453 79.584H56.5474C50.764 79.584 46.0757 74.8957 46.0757 69.1123Z"
+        fill="#7C4DFF"
+      />
+      <path
+        d="M46.0757 110.999C46.0757 105.216 50.764 100.527 56.5474 100.527H165.453C171.236 100.527 175.925 105.216 175.925 110.999C175.925 116.782 171.236 121.471 165.453 121.471H56.5474C50.764 121.471 46.0757 116.782 46.0757 110.999Z"
+        fill="#9B78FF"
+      />
+      <g clipPath="url(#draft-white-line-clip)">
+        <path
+          d="M46.0757 152.675C46.0757 147.008 50.6695 142.414 56.3362 142.414H131.615C137.282 142.414 141.876 147.008 141.876 152.675C141.876 158.341 137.282 162.935 131.615 162.935H56.3362C50.6695 162.935 46.0757 158.341 46.0757 152.675Z"
+          fill="#FBFAFF"
+        />
+        <ellipse
+          cx="142.279"
+          cy="153.222"
+          rx="17.7849"
+          ry="17.7849"
+          fill="#FBFAFF"
+        />
+      </g>
+      <path
+        className="draft-pen"
+        d="M247.36 80.1016L175.009 153.203H144V121.872L216.351 48.7715L247.36 80.1016ZM242.193 22.6619C243.564 21.2776 245.422 20.5 247.36 20.5C249.298 20.5 251.157 21.2776 252.527 22.6619L273.195 43.5585C274.565 44.9431 275.334 46.8209 275.334 48.7789C275.334 50.7369 274.565 52.6147 273.195 53.9993L257.694 69.6533L226.685 38.3306L242.193 22.6619Z"
+        fill="url(#draft-pen-fill)"
+      />
+    </svg>
+  );
+}
+
+interface CorrectionSuggestionIconProps {
+  size?: number;
+  title?: string;
+}
+
+export function CorrectionSuggestionIcon({
+  size = 238,
+  title = '교정 제안',
+}: CorrectionSuggestionIconProps) {
+  return (
+    <svg
+      width={size}
+      height={(size * 212) / 238}
+      viewBox="0 0 238 212"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={title}
+    >
+      <style>{`
+        .correction-magnifier {
+          transform-box: view-box;
+          transform-origin: 186px 62px;
+          animation: correctionMagnifierRead 6.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+          will-change: transform;
+        }
+        @keyframes correctionMagnifierRead {
+          0%, 8% { transform: translate(0, 0) scale(1); }
+          20% { transform: translate(-46px, 0) scale(1.01); }
+          32% { transform: translate(-92px, 0) scale(1.02); }
+          44% { transform: translate(-92px, 40px) scale(1.02); }
+          56% { transform: translate(-46px, 40px) scale(1.01); }
+          68% { transform: translate(-92px, 80px) scale(1.02); }
+          80% { transform: translate(-42px, 80px) scale(1.01); }
+          92%, 100% { transform: translate(0, 0) scale(1); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .correction-magnifier { animation: none; }
+        }
+      `}</style>
+      <defs>
+        <linearGradient
+          id="paint0_linear_correction_icon"
+          x1="106"
+          y1="0"
+          x2="106"
+          y2="212"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#E8E2FF" />
+          <stop offset="1" stopColor="#D0C5FE" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M64 8H148C178.928 8 204 33.0721 204 64V148C204 178.928 178.928 204 148 204H64C33.0721 204 8 178.928 8 148V64C8 33.0721 33.0721 8 64 8Z"
+        fill="url(#paint0_linear_correction_icon)"
+      />
+      <path
+        d="M64 8H148C178.928 8 204 33.0721 204 64V148C204 178.928 178.928 204 148 204H64C33.0721 204 8 178.928 8 148V64C8 33.0721 33.0721 8 64 8Z"
+        stroke="#7C4DFF"
+        strokeWidth="16"
+      />
+      <path
+        d="M44 66C44 60.4772 48.4772 56 54 56H158C163.523 56 168 60.4772 168 66C168 71.5228 163.523 76 158 76H54C48.4772 76 44 71.5228 44 66Z"
+        fill="#7C4DFF"
+      />
+      <path
+        d="M44 106C44 100.477 48.4772 96 54 96H158C163.523 96 168 100.477 168 106C168 111.523 163.523 116 158 116H54C48.4772 116 44 111.523 44 106Z"
+        fill="#9B78FF"
+      />
+      <path
+        d="M44 146C44 140.477 48.4772 136 54 136H158C163.523 136 168 140.477 168 146C168 151.523 163.523 156 158 156H54C48.4772 156 44 151.523 44 146Z"
+        fill="#BFA7FF"
+      />
+      <g className="correction-magnifier">
+        <path
+          d="M186 12C213.614 12 236 34.3858 236 62C236 75.588 230.577 87.907 221.78 96.9189L236.247 115.002C239.007 118.452 238.448 123.487 234.998 126.247C231.548 129.007 226.513 128.448 223.753 124.998L208.914 106.449C202.049 109.995 194.259 112 186 112C158.386 112 136 89.6142 136 62C136 34.3858 158.386 12 186 12Z"
+          fill="#7C4DFF"
+        />
+        <circle cx="186" cy="62" r="38" fill="#FBFAFF" />
+      </g>
+    </svg>
+  );
+}
+
+interface ReplyGenerationIconProps {
+  size?: number;
+  title?: string;
+}
+
+export function ReplyGenerationIcon({
+  size = 462,
+  title = '회신 생성',
+}: ReplyGenerationIconProps) {
+  return (
+    <svg
+      width={size}
+      height={(size * 237) / 462}
+      viewBox="0 0 462 237"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={title}
+    >
+      <style>{`
+        .reply-envelope-flap {
+          transform-box: view-box;
+          transform-origin: 220px 118px;
+          animation: replyEnvelopeSpread 5.8s ease-in-out infinite;
+          will-change: transform;
+        }
+        .reply-mail-sheet {
+          transform-box: view-box;
+          transform-origin: 220px 82px;
+          animation: replyMailSpread 5.8s ease-in-out infinite;
+          will-change: transform;
+        }
+        .reply-envelope-body {
+          transform-box: view-box;
+          transform-origin: 220px 180px;
+          animation: replyBodySpread 5.8s ease-in-out infinite;
+          will-change: transform;
+        }
+        .reply-source-top {
+          transform-box: view-box;
+          transform-origin: 378px 51px;
+          animation: replyTopCardSpread 5.8s ease-in-out infinite;
+          will-change: transform, opacity;
+        }
+        .reply-source-bottom {
+          transform-box: view-box;
+          transform-origin: 90px 173px;
+          animation: replyBottomCardSpread 5.8s ease-in-out infinite;
+          will-change: transform, opacity;
+        }
+        @keyframes replyTopCardSpread {
+          0% { transform: translate(-38px, 30px) scale(0.96); opacity: 0.78; }
+          52% { transform: translate(0, 0) scale(1); opacity: 1; }
+          100% { transform: translate(-38px, 30px) scale(0.96); opacity: 0.78; }
+        }
+        @keyframes replyBottomCardSpread {
+          0% { transform: translate(48px, -24px) scale(0.96); opacity: 0.78; }
+          56% { transform: translate(0, 0) scale(1); opacity: 1; }
+          100% { transform: translate(48px, -24px) scale(0.96); opacity: 0.78; }
+        }
+        @keyframes replyMailSpread {
+          0% { transform: translate(0, 12px) scale(0.97); }
+          54% { transform: translate(0, 0) scale(1); }
+          100% { transform: translate(0, 12px) scale(0.97); }
+        }
+        @keyframes replyEnvelopeSpread {
+          0% { transform: translate(0, 3px) scaleY(0.99); }
+          52% { transform: translate(0, 0) scaleY(1); }
+          100% { transform: translate(0, 3px) scaleY(0.99); }
+        }
+        @keyframes replyBodySpread {
+          0% { transform: translate(0, 2px) scale(1.006); }
+          52% { transform: translate(0, 0) scale(1); }
+          100% { transform: translate(0, 2px) scale(1.006); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .reply-envelope-flap, .reply-mail-sheet, .reply-envelope-body,
+          .reply-source-top, .reply-source-bottom { animation: none; }
+        }
+      `}</style>
+      <defs>
+        <filter
+          id="filter0_d_reply_icon"
+          x="250"
+          y="-24"
+          width="236"
+          height="168"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feColorMatrix
+            in="SourceAlpha"
+            type="matrix"
+            values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+            result="hardAlpha"
+          />
+          <feMorphology
+            radius="2"
+            operator="erode"
+            in="SourceAlpha"
+            result="effect1_dropShadow_reply_icon"
+          />
+          <feOffset dy="8" />
+          <feGaussianBlur stdDeviation="12" />
+          <feColorMatrix
+            type="matrix"
+            values="0 0 0 0 0.486275 0 0 0 0 0.301961 0 0 0 0 1 0 0 0 0.16 0"
+          />
+          <feBlend
+            mode="normal"
+            in2="BackgroundImageFix"
+            result="effect1_dropShadow_reply_icon"
+          />
+          <feBlend
+            mode="normal"
+            in="SourceGraphic"
+            in2="effect1_dropShadow_reply_icon"
+            result="shape"
+          />
+        </filter>
+        <filter
+          id="filter1_d_reply_icon"
+          x="-52"
+          y="84"
+          width="244"
+          height="176"
+          filterUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feColorMatrix
+            in="SourceAlpha"
+            type="matrix"
+            values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+            result="hardAlpha"
+          />
+          <feMorphology
+            radius="2"
+            operator="erode"
+            in="SourceAlpha"
+            result="effect1_dropShadow_reply_icon_bottom"
+          />
+          <feOffset dy="8" />
+          <feGaussianBlur stdDeviation="12" />
+          <feColorMatrix
+            type="matrix"
+            values="0 0 0 0 0.486275 0 0 0 0 0.301961 0 0 0 0 1 0 0 0 0.16 0"
+          />
+          <feBlend
+            mode="normal"
+            in2="BackgroundImageFix"
+            result="effect1_dropShadow_reply_icon_bottom"
+          />
+          <feBlend
+            mode="normal"
+            in="SourceGraphic"
+            in2="effect1_dropShadow_reply_icon_bottom"
+            result="shape"
+          />
+        </filter>
+        <linearGradient
+          id="paint0_linear_reply_icon"
+          x1="127"
+          y1="104.501"
+          x2="313"
+          y2="229.001"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#EBE5FF" />
+          <stop offset="1" stopColor="#CDC1FF" />
+        </linearGradient>
+      </defs>
+      <g className="reply-envelope-flap">
+        <path
+          d="M213.192 23.2296L131.726 102.951C125.612 108.934 129.848 119.319 138.402 119.319H301.553C310.113 119.319 314.346 108.921 308.22 102.942L226.536 23.2206C222.824 19.5982 216.899 19.6022 213.192 23.2296Z"
+          fill="#BFA7FF"
+          stroke="#7C4DFF"
+          strokeWidth="14.3182"
+        />
+      </g>
+      <g className="reply-mail-sheet">
+        <path
+          d="M187.852 6.12305H252.148C275.822 6.12325 295.013 25.315 295.013 48.9883V113.285C295.012 136.958 275.822 156.149 252.148 156.149H187.852C164.178 156.149 144.987 136.958 144.986 113.285V48.9883C144.986 25.3149 164.178 6.12305 187.852 6.12305Z"
+          fill="white"
+        />
+        <path
+          d="M187.852 6.12305H252.148C275.822 6.12325 295.013 25.315 295.013 48.9883V113.285C295.012 136.958 275.822 156.149 252.148 156.149H187.852C164.178 156.149 144.987 136.958 144.986 113.285V48.9883C144.986 25.3149 164.178 6.12305 187.852 6.12305Z"
+          stroke="#7C4DFF"
+          strokeWidth="12.247"
+        />
+        <path
+          d="M172.542 50.5196C172.542 46.2922 175.969 42.8652 180.197 42.8652H259.802C264.03 42.8652 267.457 46.2922 267.457 50.5196C267.457 54.747 264.03 58.174 259.802 58.174H180.197C175.969 58.174 172.542 54.747 172.542 50.5196Z"
+          fill="#7C4DFF"
+        />
+        <path
+          d="M172.542 81.1368C172.542 76.9094 175.969 73.4824 180.197 73.4824H259.802C264.03 73.4824 267.457 76.9094 267.457 81.1368C267.457 85.3642 264.03 88.7912 259.802 88.7912H180.197C175.969 88.7912 172.542 85.3642 172.542 81.1368Z"
+          fill="#9B78FF"
+        />
+        <path
+          d="M172.542 111.754C172.542 107.527 175.969 104.1 180.197 104.1H259.802C264.03 104.1 267.457 107.527 267.457 111.754C267.457 115.981 264.03 119.408 259.802 119.408H180.197C175.969 119.408 172.542 115.981 172.542 111.754Z"
+          fill="#BFA7FF"
+        />
+      </g>
+      <g className="reply-envelope-body">
+        <path
+          d="M216.28 153.864L141.7 105.11C135.351 100.959 126.932 105.514 126.932 113.099V219.546C126.932 224.818 131.205 229.091 136.477 229.091H303.523C308.794 229.091 313.068 224.818 313.068 219.546V113.437C313.068 105.784 304.513 101.243 298.174 105.531L226.851 153.78C223.666 155.935 219.499 155.968 216.28 153.864Z"
+          fill="url(#paint0_linear_reply_icon)"
+          stroke="#7C4DFF"
+          strokeWidth="14.3182"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+      <g className="reply-source-top">
+        <g filter="url(#filter0_d_reply_icon)">
+          <path
+            d="M416.9 24H339.9C327.142 24 316.8 33.402 316.8 45V57C316.8 68.598 327.142 78 339.9 78H416.9C429.658 78 440 68.598 440 57V45C440 33.402 429.658 24 416.9 24Z"
+            fill="white"
+          />
+          <path
+            d="M324.5 50.5469C324.5 43.9195 329.873 38.5469 336.5 38.5469H347.5C354.127 38.5469 359.5 43.9195 359.5 50.5469C359.5 57.1743 354.127 62.5469 347.5 62.5469H336.5C329.873 62.5469 324.5 57.1743 324.5 50.5469Z"
+            fill="#7C4DFF"
+          />
+          <path
+            d="M338.094 52.2246H339.721L340.568 53.332C341.122 52.7441 341.457 51.8213 341.457 50.5977C341.457 48.3418 340.322 47.1113 338.709 47.1113C337.096 47.1113 335.961 48.3418 335.961 50.5977C335.961 52.8535 337.096 54.084 338.709 54.084C338.969 54.084 339.215 54.0498 339.447 53.9883L338.094 52.2246ZM343.248 50.5977C343.248 52.3955 342.633 53.7764 341.648 54.6445L343.016 56.4082H341.279L340.459 55.3555C339.926 55.5742 339.338 55.6836 338.709 55.6836C336.111 55.6836 334.17 53.7832 334.17 50.5977C334.17 47.3984 336.111 45.5117 338.709 45.5117C341.307 45.5117 343.248 47.3984 343.248 50.5977ZM348.491 45.6484V55.5469H346.7V47.3848H346.646L344.335 48.8613V47.2344L346.783 45.6484H348.491Z"
+            fill="white"
+          />
+          <path
+            d="M378.4 44H422.4"
+            stroke="#C4B5FD"
+            strokeWidth="9"
+            strokeLinecap="round"
+          />
+          <path
+            d="M378.4 57H405.9"
+            stroke="#C4B5FD"
+            strokeWidth="9"
+            strokeLinecap="round"
+          />
+        </g>
+      </g>
+      <g className="reply-source-bottom">
+        <g filter="url(#filter1_d_reply_icon)">
+          <path
+            d="M125.056 146H54.2438C42.5112 146 33 155.402 33 167V179C33 190.598 42.5112 200 54.2438 200H125.056C136.789 200 146.3 190.598 146.3 179V167C146.3 155.402 136.789 146 125.056 146Z"
+            fill="white"
+          />
+          <path
+            d="M94.6001 166H126.5"
+            stroke="#C4B5FD"
+            strokeWidth="9"
+            strokeLinecap="round"
+          />
+          <path
+            d="M94.6001 179H116.6"
+            stroke="#C4B5FD"
+            strokeWidth="9"
+            strokeLinecap="round"
+          />
+          <path
+            d="M40 172.547C40 165.919 45.3726 160.547 52 160.547H63C69.6274 160.547 75 165.919 75 172.547C75 179.174 69.6274 184.547 63 184.547H52C45.3726 184.547 40 179.174 40 172.547Z"
+            fill="#7C4DFF"
+          />
+          <path
+            d="M52.5938 174.225H54.2207L55.0684 175.332C55.6221 174.744 55.957 173.821 55.957 172.598C55.957 170.342 54.8223 169.111 53.209 169.111C51.5957 169.111 50.4609 170.342 50.4609 172.598C50.4609 174.854 51.5957 176.084 53.209 176.084C53.4688 176.084 53.7148 176.05 53.9473 175.988L52.5938 174.225ZM57.748 172.598C57.748 174.396 57.1328 175.776 56.1484 176.645L57.5156 178.408H55.7793L54.959 177.355C54.4258 177.574 53.8379 177.684 53.209 177.684C50.6113 177.684 48.6699 175.783 48.6699 172.598C48.6699 169.398 50.6113 167.512 53.209 167.512C55.8066 167.512 57.748 169.398 57.748 172.598ZM58.972 177.547V176.262L62.472 172.885C63.47 171.887 63.9895 171.299 63.9895 170.465C63.9895 169.549 63.2649 168.961 62.2942 168.961C61.2688 168.961 60.6126 169.604 60.6263 170.602H58.9309C58.9173 168.729 60.3255 167.512 62.3079 167.512C64.3313 167.512 65.6985 168.715 65.6985 170.383C65.6985 171.504 65.1516 172.406 63.2102 174.238L61.4466 175.988V176.057H65.8489V177.547H58.972Z"
+            fill="white"
+          />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
 interface NoCorrectionIconProps {
   size?: number;
   title?: string;
