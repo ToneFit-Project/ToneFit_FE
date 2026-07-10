@@ -1208,7 +1208,7 @@ const PanelSuccessBody = ({
         <ButtonLongV2
           onClick={() =>
             window.open(
-              'https://chromewebstore.google.com/category/extensions',
+              'https://chromewebstore.google.com/detail/tonefit/hccpncocbnbphkmandkcmnefolgfhcgi',
               '_blank',
               'noopener,noreferrer'
             )
