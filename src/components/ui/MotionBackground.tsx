@@ -1,5 +1,10 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, ComponentType, ReactNode } from 'react';
 import { ShaderGradient, ShaderGradientCanvas } from '@shadergradient/react';
+
+// @shadergradient/react 타입이 React 18 기준이라 React 19와 충돌 — any 캐스팅으로 우회
+const ShaderGradientAny = ShaderGradient as ComponentType<
+  Record<string, unknown>
+>;
 
 export { ToneFitSoftPurpleAuroraHero as FeatureBeforeBg } from './BeforePurple';
 export { ToneFitPurpleAuroraHero as FeatureAfterBg } from './AfterPurple';
@@ -70,9 +75,8 @@ const MotionBackground = ({
           pointerEvents: 'none',
         }}
       >
-        <ShaderGradient
+        <ShaderGradientAny
           animate="on"
-          axesHelper="off"
           brightness={1.2}
           cAzimuthAngle={180}
           cDistance={3.08}
