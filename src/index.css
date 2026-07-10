@@ -392,25 +392,25 @@ html {
 }
 
 /* 2xl: ~1536px */
-@media (max-width: 1535px) {
+/* @media (max-width: 1535px) {
   html {
     font-size: 95%;
   }
-}
+} */
 
 /* xl: ~1280px */
-@media (max-width: 1279px) {
+/* @media (max-width: 1279px) {
   html {
     font-size: 90%;
   }
-}
+} */
 
 /* lg: ~1024px */
-@media (max-width: 1023px) {
+/* @media (max-width: 1023px) {
   html {
     font-size: 85%;
   }
-}
+} */
 
 /* md: ~768px */
 /* @media (max-width: 768px) {
