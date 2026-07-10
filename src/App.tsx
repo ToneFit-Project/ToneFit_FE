@@ -1,7 +1,10 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import AOS from 'aos';
+import 'aos/dist/aos.css';
 import { ROUTES, STORAGE_KEYS } from '@/constants';
 import apiClient from '@/api';
+import LandingPage from '@/pages/landing/LandingPage';
 // ─────────────────────────────────────────────────────────────────
 // import 페이지
 // home - 공용레이아웃, 교정시작, 교정로딩, 교정비교, 교정완료(로딩), 교정결과
@@ -58,10 +61,15 @@ const App = () => {
     if (token) {
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     }
+
+    AOS.init({ once: false, duration: 600, easing: 'ease-out', offset: 80 });
   }, []);
 
   return (
     <Routes>
+      {/* ── 랜딩 페이지 ── */}
+      <Route path="/" element={<LandingPage />} />
+
       {/* ── 약관 동의 라우트 (Google OAuth 흐름에서 자동 진입) ── */}
       {/* AuthLayout은 디자인 확정 후 적용 예정 */}
       <Route path={ROUTES.JOIN_ACCEPT} element={<JoinAcceptPage />} />

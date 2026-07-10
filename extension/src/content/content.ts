@@ -47,6 +47,14 @@ const SEND_DROPDOWN_SELECTORS = [
   '.gU.T-I', // Gmail internal dropdown class
 ].join(', ');
 
+/** 보내기 버튼 fallback 셀렉터 (드롭다운 없을 때) */
+const SEND_BTN_SELECTORS = [
+  '[data-tooltip*="보내기"]',
+  '[aria-label*="보내기"]',
+  '[data-tooltip*="Send"]',
+  '[aria-label*="Send"]',
+].join(', ');
+
 const OVERLAY_ID = 'tonefit-overlay';
 const TOOLBAR_BTN_CLASS = 'tonefit-toolbar-btn';
 const STYLES_ID = 'tonefit-styles';
@@ -62,9 +70,16 @@ const isComposeOpen = (): boolean => !!document.querySelector(SUBJECT_SELECTOR);
 
 /**
  * 작성창 컨테이너 반환 (오버레이 부모로 사용)
- * subject input에서 가장 가까운 [role="dialog"] 또는 form으로 찾음
+ * 인라인 답장: [data-compose-id] 우선
+ * 팝업 작성창: subjectbox 기준 [role="dialog"]
  */
 const getComposeContainer = (): HTMLElement | null => {
+  // 인라인 답장 — data-compose-id가 본문/툴바를 모두 포함하는 루트
+  const inlineCompose =
+    document.querySelector<HTMLElement>('[data-compose-id]');
+  if (inlineCompose) return inlineCompose;
+
+  // 팝업 작성창
   const subjectEl = document.querySelector<HTMLElement>(SUBJECT_SELECTOR);
   if (!subjectEl) return null;
 
@@ -77,8 +92,8 @@ const getComposeContainer = (): HTMLElement | null => {
 };
 
 /** 작성창 내에서 본문 영역 탐색 */
-const getBodyElement = (): HTMLElement | null => {
-  const container = getComposeContainer();
+const getBodyElement = (composeEl?: HTMLElement | null): HTMLElement | null => {
+  const container = composeEl ?? getComposeContainer();
 
   for (const selector of BODY_SELECTORS) {
     const el = container
@@ -86,6 +101,36 @@ const getBodyElement = (): HTMLElement | null => {
       : document.querySelector<HTMLElement>(selector);
     if (el) return el;
   }
+
+  // fallback: 인라인 답장처럼 aria-label 없는 경우 — 보내기 버튼이 있는 컨테이너 내 최초 contenteditable
+  if (container) {
+    const hasSendBtn = container.querySelector(
+      SEND_DROPDOWN_SELECTORS + ', ' + SEND_BTN_SELECTORS
+    );
+    if (hasSendBtn) {
+      const editable = container.querySelector<HTMLElement>(
+        '[contenteditable="true"]'
+      );
+      if (editable) return editable;
+    }
+  }
+
+  // 최후 수단: 페이지 전체에서 보내기 버튼 근처 contenteditable 탐색
+  const sendBtn = document.querySelector<HTMLElement>(
+    SEND_DROPDOWN_SELECTORS + ', ' + SEND_BTN_SELECTORS
+  );
+  if (sendBtn) {
+    const composeRoot =
+      sendBtn.closest<HTMLElement>('[role="dialog"]') ??
+      sendBtn.closest<HTMLElement>('form') ??
+      sendBtn.closest<HTMLElement>('.nH') ??
+      sendBtn.parentElement;
+    const editable = composeRoot?.querySelector<HTMLElement>(
+      '[contenteditable="true"]'
+    );
+    if (editable) return editable;
+  }
+
   return null;
 };
 
@@ -154,20 +199,21 @@ const TONEFIT_SVG = `<svg width="20" height="20" viewBox="0 0 28 28" fill="none"
  * Gmail 작성창 툴바에 ToneFit 버튼 삽입
  * 보내기 버튼 바로 우측에 위치
  */
-const injectToolbarButton = (composeEl: HTMLElement) => {
+const injectToolbarButton = (composeEl: HTMLElement): boolean => {
   // 이미 삽입된 경우 스킵
-  if (composeEl.querySelector(`.${TOOLBAR_BTN_CLASS}`)) return;
+  if (composeEl.querySelector(`.${TOOLBAR_BTN_CLASS}`)) return true;
 
-  // ▼ 드롭다운 버튼 탐색
-  const dropdownBtn = composeEl.querySelector<HTMLElement>(
-    SEND_DROPDOWN_SELECTORS
-  );
+  // ▼ 드롭다운 버튼 탐색 → 없으면 보내기 버튼으로 fallback
+  const dropdownBtn =
+    composeEl.querySelector<HTMLElement>(SEND_DROPDOWN_SELECTORS) ??
+    composeEl.querySelector<HTMLElement>(SEND_BTN_SELECTORS);
   if (!dropdownBtn) {
-    console.error(
-      '[ToneFit] 드롭다운 버튼을 찾지 못했습니다. 셀렉터:',
-      SEND_DROPDOWN_SELECTORS
-    );
-    return;
+    if (DEBUG)
+      console.error(
+        '[ToneFit] 드롭다운/보내기 버튼을 찾지 못했습니다.',
+        SEND_DROPDOWN_SELECTORS
+      );
+    return false;
   }
 
   injectStyles();
@@ -183,29 +229,181 @@ const injectToolbarButton = (composeEl: HTMLElement) => {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
 
-    // 답장 여부 감지: .gmail_quote 존재(composeEl 내부 또는 문서 전체) or 제목 Re:/답장:
+    // 답장 여부 감지: body 에디터 내부 → composeEl 순으로 탐색 (document 전체 금지)
     const subjectEl =
       composeEl.querySelector<HTMLInputElement>('input[name="subjectbox"]') ??
       document.querySelector<HTMLInputElement>('input[name="subjectbox"]');
+    // subjectbox는 인라인 답장에서 숨겨져 있으므로 hidden input[name="subject"]도 함께 확인
     const subject = subjectEl?.value ?? '';
+    const hiddenSubjectEl = composeEl.querySelector<HTMLInputElement>(
+      'input[name="subject"]'
+    );
+    const hiddenSubject = hiddenSubjectEl?.value ?? '';
+
+    const bodyEditorEl = getBodyElement();
+
+    // contenteditable 내 .gmail_quote (버튼 클릭 후 펼쳐진 상태)
     const quoteEl =
-      composeEl.querySelector<HTMLElement>('.gmail_quote') ??
-      document.querySelector<HTMLElement>('.gmail_quote');
-    const isReply = !!quoteEl || /^(Re:|RE:|답장:)/i.test(subject);
+      bodyEditorEl?.querySelector<HTMLElement>('.gmail_quote') ??
+      composeEl.querySelector<HTMLElement>('.gmail_quote');
 
-    if (isReply && quoteEl) {
-      // 인용 블록에서 발신자(gmail_attr) + 본문 추출
-      const attrEl = quoteEl.querySelector<HTMLElement>('.gmail_attr');
-      const sender = attrEl?.innerText?.trim() ?? '';
-      // 발신자 라인 제거한 나머지가 본문
-      const clone = quoteEl.cloneNode(true) as HTMLElement;
-      clone.querySelector('.gmail_attr')?.remove();
-      const body = clone.innerText.trim();
+    // "잘린 본문 표시" 버튼 존재 여부 — 답장 작성창에서만 나타남 (클릭 전/후 모두 DOM에 있음)
+    const trimBtn = composeEl.querySelector('[aria-label="잘린 본문 표시"]');
 
+    const isReply =
+      !!quoteEl ||
+      !!trimBtn ||
+      /^(Re:|RE:|답장:)/i.test(subject) ||
+      /^(Re:|RE:|답장:)/i.test(hiddenSubject);
+
+    if (isReply) {
+      // ── 사전 검증 ────────────────────────────────────────────────
+      const openReplyError = (errorCode: string) => {
+        chrome.runtime.sendMessage({
+          type: 'OPEN_SIDE_PANEL_REPLY',
+          mails: [],
+          replyError: errorCode,
+        });
+      };
+
+      // ── 헬퍼: 블록 인지 텍스트 추출 (detached 노드용 innerText 대체) ──
+      const tfText = (root: Element): string => {
+        const BLOCK =
+          /^(DIV|P|LI|TR|TD|BLOCKQUOTE|H[1-6]|PRE|TABLE|UL|OL|SECTION|ARTICLE|HEADER|FOOTER)$/;
+        let out = '';
+        const walk = (nd: Node) => {
+          if (nd.nodeType === 3) {
+            out += nd.textContent;
+            return;
+          }
+          if (nd.nodeType !== 1) return;
+          const el = nd as Element;
+          const tg = el.tagName;
+          if (
+            tg === 'STYLE' ||
+            tg === 'SCRIPT' ||
+            tg === 'TITLE' ||
+            tg === 'NOSCRIPT'
+          )
+            return;
+          if (tg === 'BR') {
+            out += '\n';
+            return;
+          }
+          const bl = BLOCK.test(tg);
+          if (bl && out && !out.endsWith('\n')) out += '\n';
+          for (const c of nd.childNodes) walk(c);
+          if (bl && out && !out.endsWith('\n')) out += '\n';
+        };
+        walk(root);
+        return out
+          .replace(/\u00a0/g, ' ')
+          .replace(/[ \t]+\n/g, '\n')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+      };
+
+      // ── 헬퍼: 중첩 gmail_quote를 최근 maxMails건 분리 (최신 우선) ──
+      const SIG = '.gmail_signature,[data-smartmail="gmail_signature"]';
+      const tfSplit = (
+        rootQuote: Element,
+        maxMails: number
+      ): { sender: string; body: string }[] => {
+        const acc: { sender: string; body: string }[] = [];
+        let cur: Element | null = rootQuote;
+        while (cur && acc.length < maxMails) {
+          const attrEl = cur.querySelector('.gmail_attr');
+          const ownAttr =
+            attrEl && attrEl.closest('.gmail_quote') === cur ? attrEl : null;
+          const sender = ownAttr
+            ? (ownAttr.textContent ?? '').trim().replace(/\s+/g, ' ')
+            : '발신자 미상';
+          const bq: Element | null = cur.matches('blockquote')
+            ? cur
+            : cur.querySelector(':scope > blockquote.gmail_quote');
+          if (bq) {
+            const clone = bq.cloneNode(true) as Element;
+            clone
+              .querySelectorAll(`.gmail_quote,.gmail_attr,${SIG}`)
+              .forEach((x) => x.remove());
+            const body = tfText(clone);
+            if (body) acc.push({ sender, body });
+            cur = bq.querySelector('.gmail_quote');
+          } else {
+            // 비표준(Fwd/모바일): 하위 .gmail_quote 제거 없이 병합 1건 보존 후 종료
+            const clone = cur.cloneNode(true) as Element;
+            const a2 = clone.querySelector('.gmail_attr');
+            if (a2 && a2.closest('.gmail_quote') === clone) a2.remove();
+            clone.querySelectorAll(SIG).forEach((x) => x.remove());
+            const body = tfText(clone);
+            if (body) acc.push({ sender, body });
+            cur = null;
+          }
+        }
+        return acc;
+      };
+
+      // ── 본문 추출 ─────────────────────────────────────────────────
+      // Case A: 버튼 클릭 후 → contenteditable에 .gmail_quote 존재
+      // Case B: 버튼 클릭 전 → hidden input[name="uet"]에 인코딩된 HTML로 존재
+      let mails: { sender: string; body: string }[] = [];
+      const noQuote =
+        !quoteEl &&
+        !composeEl.querySelector<HTMLInputElement>('input[name="uet"]')?.value;
+
+      try {
+        if (quoteEl) {
+          mails = tfSplit(quoteEl, 3);
+        } else {
+          const uetInput =
+            composeEl.querySelector<HTMLInputElement>('input[name="uet"]');
+          if (uetInput?.value) {
+            const parsed = new DOMParser().parseFromString(
+              uetInput.value,
+              'text/html'
+            );
+            const parsedQuote = parsed.querySelector('.gmail_quote');
+            if (parsedQuote) mails = tfSplit(parsedQuote, 3);
+          }
+        }
+      } catch {
+        openReplyError('REPLY_EXTRACT_ERROR');
+        return;
+      }
+
+      if (DEBUG)
+        console.error(
+          '[ToneFit] reply 추출 — mails:',
+          mails.length,
+          '건',
+          mails.map((m) => `${m.sender}(${m.body.length}자)`)
+        );
+
+      // 본문이 완전히 비어있는 경우
+      if (!mails.length) {
+        openReplyError(noQuote ? 'REPLY_NO_QUOTE' : 'REPLY_EMPTY');
+        return;
+      }
+
+      // 최신 메일 단독 10,000자 초과
+      if (mails[0].body.length > 10_000) {
+        openReplyError('REPLY_TOO_LONG');
+        return;
+      }
+
+      // 한국어 아님 (최신 메일 기준)
+      if (!/[가-힣]/.test(mails[0].body)) {
+        openReplyError('REPLY_NON_KOREAN');
+        return;
+      }
+
+      // 시간순(오래된→최신)으로 뒤집어 전송 — BE 계약: 마지막 원소 = 답장 누른 메일
       chrome.runtime.sendMessage({
         type: 'OPEN_SIDE_PANEL_REPLY',
-        mails: [{ sender, body }],
+        mails: mails.slice().reverse(),
+        subject: subject || hiddenSubject || undefined,
       });
+      return;
     } else {
       const bodyEl2 = getBodyElement();
       const bodyLength = bodyEl2 ? getUserTypedLength(bodyEl2, composeEl) : 0;
@@ -230,6 +428,7 @@ const injectToolbarButton = (composeEl: HTMLElement) => {
     dropdownBtn.insertAdjacentElement('afterend', btn);
   }
   if (DEBUG) console.error('[ToneFit] 툴바 버튼 삽입 완료 (드롭다운 우측)');
+  return true;
 };
 
 /**
@@ -243,6 +442,7 @@ const getComposeRootFromSubject = (subjectEl: HTMLElement): HTMLElement =>
 
 /** 드롭다운 버튼 기준으로 컴포즈 루트 반환 (인라인 답장 대응) */
 const getComposeRootFromDropdown = (dropdownEl: HTMLElement): HTMLElement =>
+  dropdownEl.closest<HTMLElement>('[data-compose-id]') ??
   dropdownEl.closest<HTMLElement>('[role="dialog"]') ??
   dropdownEl.closest<HTMLElement>('form') ??
   dropdownEl.closest<HTMLElement>('.nH') ??
@@ -257,24 +457,39 @@ const getComposeRootFromDropdown = (dropdownEl: HTMLElement): HTMLElement =>
 const observeComposeWindows = () => {
   const injectedRoots = new WeakSet<HTMLElement>();
 
+  const injectWithRetry = (root: HTMLElement, initialDelay = 600) => {
+    const RETRY_DELAYS = [initialDelay, 1000, 2000, 3000];
+    let attempt = 0;
+    const attempt_inject = () => {
+      if (injectToolbarButton(root)) {
+        snapshotInitialBody(root);
+        return;
+      }
+      attempt++;
+      if (attempt < RETRY_DELAYS.length) {
+        setTimeout(attempt_inject, RETRY_DELAYS[attempt]);
+      } else {
+        if (DEBUG)
+          console.error(
+            '[ToneFit] 툴바 버튼 삽입 최종 실패 — 드롭다운 버튼 없음'
+          );
+      }
+    };
+    setTimeout(attempt_inject, RETRY_DELAYS[0]);
+  };
+
   const tryInjectFromSubject = (subjectEl: HTMLElement) => {
     const root = getComposeRootFromSubject(subjectEl);
     if (injectedRoots.has(root)) return;
     injectedRoots.add(root);
-    setTimeout(() => {
-      injectToolbarButton(root);
-      snapshotInitialBody(root);
-    }, 600);
+    injectWithRetry(root);
   };
 
   const tryInjectFromDropdown = (dropdownEl: HTMLElement) => {
     const root = getComposeRootFromDropdown(dropdownEl);
     if (injectedRoots.has(root)) return;
     injectedRoots.add(root);
-    setTimeout(() => {
-      injectToolbarButton(root);
-      snapshotInitialBody(root);
-    }, 600);
+    injectWithRetry(root);
   };
 
   // 드롭다운 감지용 셀렉터 목록
@@ -288,10 +503,24 @@ const observeComposeWindows = () => {
     '.gU.T-I',
   ];
 
+  const tryInjectFromComposeId = (composeEl: HTMLElement) => {
+    if (injectedRoots.has(composeEl)) return;
+    injectedRoots.add(composeEl);
+    injectWithRetry(composeEl);
+  };
+
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (!(node instanceof HTMLElement)) continue;
+
+        // 인라인 답장: data-compose-id 루트 직접 감지 (가장 우선)
+        if (node.matches('[data-compose-id]')) {
+          tryInjectFromComposeId(node);
+        }
+        node
+          .querySelectorAll<HTMLElement>('[data-compose-id]')
+          .forEach(tryInjectFromComposeId);
 
         // 새 메일 작성창 감지
         if (node.matches(SUBJECT_SELECTOR)) {
@@ -301,7 +530,7 @@ const observeComposeWindows = () => {
           .querySelectorAll<HTMLElement>(SUBJECT_SELECTOR)
           .forEach(tryInjectFromSubject);
 
-        // 인라인 답장 감지 (드롭다운 버튼 기준)
+        // 인라인 답장 감지 (드롭다운 버튼 기준 — fallback)
         for (const sel of DROPDOWN_SELECTORS_LIST) {
           if (node.matches(sel)) tryInjectFromDropdown(node);
           node
@@ -319,17 +548,26 @@ const observeComposeWindows = () => {
 const injectIntoExistingComposes = () => {
   document.querySelectorAll<HTMLElement>(SUBJECT_SELECTOR).forEach((el) => {
     const root = getComposeRootFromSubject(el);
-    injectToolbarButton(root);
-    setTimeout(() => snapshotInitialBody(root), 600);
+    if (!injectToolbarButton(root)) {
+      setTimeout(() => {
+        if (injectToolbarButton(root)) snapshotInitialBody(root);
+      }, 600);
+    } else {
+      setTimeout(() => snapshotInitialBody(root), 600);
+    }
   });
 
-  // 인라인 답장: 제목 없이 드롭다운만 있는 경우
   document
     .querySelectorAll<HTMLElement>(SEND_DROPDOWN_SELECTORS)
     .forEach((el) => {
       const root = getComposeRootFromDropdown(el);
-      injectToolbarButton(root);
-      setTimeout(() => snapshotInitialBody(root), 600);
+      if (!injectToolbarButton(root)) {
+        setTimeout(() => {
+          if (injectToolbarButton(root)) snapshotInitialBody(root);
+        }, 600);
+      } else {
+        setTimeout(() => snapshotInitialBody(root), 600);
+      }
     });
 };
 
@@ -341,16 +579,17 @@ observeComposeWindows();
 
 const showOverlay = () => {
   if (!isComposeOpen()) {
-    console.error(
-      '[ToneFit] 작성창을 찾을 수 없어 오버레이를 표시하지 않습니다'
-    );
+    if (DEBUG)
+      console.error(
+        '[ToneFit] 작성창을 찾을 수 없어 오버레이를 표시하지 않습니다'
+      );
     return;
   }
   if (document.getElementById(OVERLAY_ID)) return;
 
   const container = getComposeContainer();
   if (!container) {
-    console.error('[ToneFit] 작성창 컨테이너를 찾을 수 없습니다');
+    if (DEBUG) console.error('[ToneFit] 작성창 컨테이너를 찾을 수 없습니다');
     return;
   }
 
@@ -507,13 +746,15 @@ const getUserTypedLength = (
 const injectBody = (content: string) => {
   const bodyEl = getBodyElement();
   if (!bodyEl) {
-    console.error('[ToneFit] 본문 영역을 찾을 수 없습니다.', BODY_SELECTORS);
+    if (DEBUG)
+      console.error('[ToneFit] 본문 영역을 찾을 수 없습니다.', BODY_SELECTORS);
     return;
   }
 
   const escapeHtml = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const normalized = content.trim().replace(/\n{3,}/g, '\n\n');
+  const unescaped = content.replace(/\\n/g, '\n');
+  const normalized = unescaped.trim().replace(/\n{3,}/g, '\n\n');
   const newHtml = normalized
     .split('\n')
     .map((line) =>
@@ -542,10 +783,106 @@ const injectEmail = (subject: string, content: string) => {
   setTimeout(() => injectBody(content), 50);
 };
 
+/** 회신 초안 삽입 core — 생성하기와 동일하게 body 전체 교체 */
+const doInjectReplyBody = (bodyEl: HTMLElement, content: string) => {
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const unescaped = content.replace(/\\n/g, '\n');
+  const normalized = unescaped.trim().replace(/\n{3,}/g, '\n\n') + '\n\n';
+  const draftHtml = normalized
+    .split('\n')
+    .map((line) =>
+      line.trim() === '' ? '<div><br></div>' : `<div>${escapeHtml(line)}</div>`
+    )
+    .join('');
+
+  // 펼쳐진 인용 메일(.gmail_quote)이 있으면 보존하고 앞부분만 교체
+  const quoteEl = bodyEl.querySelector<HTMLElement>('.gmail_quote');
+
+  // bodyEl의 직계 자식 중 quoteEl을 포함하는 노드를 찾는다
+  let anchorChild: Node | null = quoteEl;
+  while (anchorChild && anchorChild.parentNode !== bodyEl) {
+    anchorChild = anchorChild.parentNode;
+  }
+
+  if (anchorChild) {
+    // anchorChild 이전의 직계 자식만 제거 후 초안 삽입
+    const nodesToRemove: Node[] = [];
+    for (const node of Array.from(bodyEl.childNodes)) {
+      if (node === anchorChild) break;
+      nodesToRemove.push(node);
+    }
+    nodesToRemove.forEach((n) => bodyEl.removeChild(n));
+
+    const draftContainer = document.createElement('div');
+    draftContainer.innerHTML = draftHtml;
+    bodyEl.insertBefore(draftContainer, anchorChild);
+  } else {
+    bodyEl.innerHTML = draftHtml;
+  }
+
+  bodyEl.focus();
+  bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
+  if (DEBUG)
+    console.error(
+      '[ToneFit] 회신 초안 주입 — 길이:',
+      content.length,
+      '/ body 내용:',
+      bodyEl.innerText.slice(0, 50)
+    );
+};
+
+/**
+ * 회신 초안 삽입 with retry
+ * Gmail editor 초기화가 늦을 때 본문이 리셋되는 경우를 대비해
+ * 삽입 후 검증하고, 비어있으면 최대 3회 재시도
+ */
+const injectReplyBody = (content: string, attempt = 0) => {
+  const MAX_ATTEMPTS = 3;
+  const VERIFY_DELAY = 500;
+
+  const bodyEl = getBodyElement();
+  if (DEBUG)
+    console.error(
+      '[ToneFit] injectReplyBody — attempt:',
+      attempt,
+      '/ bodyEl:',
+      bodyEl?.id,
+      bodyEl?.getAttribute('aria-label')
+    );
+  if (!bodyEl) {
+    if (attempt < MAX_ATTEMPTS) {
+      if (DEBUG) console.error('[ToneFit] body 없음 — 재시도:', attempt + 1);
+      setTimeout(() => injectReplyBody(content, attempt + 1), VERIFY_DELAY);
+    } else {
+      if (DEBUG) console.error('[ToneFit] 회신 본문 영역 찾기 최종 실패');
+    }
+    return;
+  }
+
+  doInjectReplyBody(bodyEl, content);
+
+  // Gmail init이 완료되면서 content를 리셋하는 케이스 대비 — 삽입 후 검증
+  setTimeout(() => {
+    if (!bodyEl.isConnected || bodyEl.innerText.trim()) return; // 정상이면 종료
+    if (attempt < MAX_ATTEMPTS) {
+      if (DEBUG)
+        console.error(
+          '[ToneFit] Gmail이 본문을 리셋했습니다. 재시도:',
+          attempt + 1
+        );
+      injectReplyBody(content, attempt + 1);
+    } else {
+      if (DEBUG)
+        console.error('[ToneFit] 회신 초안 주입 최종 실패 (Gmail 리셋 반복)');
+    }
+  }, VERIFY_DELAY);
+};
+
 const openComposeAndInject = async (subject: string, content: string) => {
   const composeBtn = document.querySelector<HTMLElement>(COMPOSE_BTN_SELECTOR);
   if (!composeBtn) {
-    console.error('[ToneFit] 편지쓰기 버튼을 찾을 수 없습니다');
+    if (DEBUG) console.error('[ToneFit] 편지쓰기 버튼을 찾을 수 없습니다');
     return;
   }
 
@@ -565,7 +902,7 @@ const openComposeAndInject = async (subject: string, content: string) => {
     }
   }
 
-  console.error('[ToneFit] 작성창이 열리지 않았습니다 (3초 초과)');
+  if (DEBUG) console.error('[ToneFit] 작성창이 열리지 않았습니다 (3초 초과)');
 };
 
 // ── 메시지 수신 ───────────────────────────────────────────────────
@@ -583,15 +920,38 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === 'INSERT_EMAIL') {
     removeOverlay();
-    const { subject, content } = message as {
+    const { subject, content, isReply } = message as {
       type: string;
       subject: string;
       content: string;
+      isReply?: boolean;
     };
 
-    if (isComposeOpen()) {
+    if (DEBUG)
+      console.error(
+        '[ToneFit] INSERT_EMAIL 수신 — subject:',
+        subject,
+        '/ content 길이:',
+        content?.length,
+        '/ isReply:',
+        isReply,
+        '/ isComposeOpen:',
+        isComposeOpen()
+      );
+    if (DEBUG)
+      console.error(
+        '[ToneFit] INSERT_EMAIL content 앞 200자:',
+        content?.slice(0, 200)
+      );
+
+    if (isReply) {
+      // Gmail 에디터 초기화 완료 대기 후 삽입 (즉시 삽입 시 init이 덮어쓰는 현상 방지)
+      setTimeout(() => injectReplyBody(content), 300);
+    } else if (isComposeOpen()) {
       injectEmail(subject, content);
     } else {
+      if (DEBUG)
+        console.error('[ToneFit] 작성창 없음 → openComposeAndInject 시도');
       openComposeAndInject(subject, content);
     }
     return;
