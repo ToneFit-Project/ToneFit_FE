@@ -11,7 +11,7 @@ import Footer from '@/components/layout/Footer';
 const LandingPage = () => {
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen min-w-420"
       style={{
         background:
           'linear-gradient(140deg, #FFF 0%, #F1ECFF 90.7%), var(--color-background-page)',
