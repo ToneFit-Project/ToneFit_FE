@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import Header from './Header';
+import Header from '../../pages/landing/sections/LandingHeader';
 import Footer from './Footer';
 
 interface TermsLayoutProps {
@@ -37,13 +37,13 @@ const TermsLayout = ({ title, description, children }: TermsLayoutProps) => {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
+      className="min-h-screen flex flex-col min-w-420"
       style={{
         background:
           'linear-gradient(162deg, rgba(255,255,255,0.2) 11%, rgba(187,166,255,0.2) 27%, rgba(124,77,255,0.2) 94%), #f8f8fb',
       }}
     >
-      <Header className="!relative" />
+      <Header />
 
       {/* 본문 */}
       <main className="flex-1 flex items-stretch justify-center px-5 py-13">
