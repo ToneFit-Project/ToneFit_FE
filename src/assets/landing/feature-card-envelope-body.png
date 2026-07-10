@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 200.455 139.883" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path id="Envelope Body / Front" d="M96.5073 57.4968L21.9276 8.74251C15.5788 4.59219 7.15909 9.14724 7.15909 16.7322V123.179C7.15909 128.451 11.4327 132.724 16.7045 132.724H183.75C189.022 132.724 193.295 128.451 193.295 123.179V17.07C193.295 9.41681 184.74 4.8755 178.401 9.16379L107.079 57.4133C103.894 59.5681 99.7262 59.601 96.5073 57.4968Z" fill="url(#paint0_linear_0_13)" stroke="var(--stroke-0, #7C4DFF)" stroke-width="14.3182" stroke-linecap="round" stroke-linejoin="round"/>
+<defs>
+<linearGradient id="paint0_linear_0_13" x1="7.22721" y1="8.13395" x2="193.227" y2="132.634" gradientUnits="userSpaceOnUse">
+<stop stop-color="#EBE5FF"/>
+<stop offset="1" stop-color="#CDC1FF"/>
+</linearGradient>
+</defs>
+</svg>
